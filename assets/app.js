@@ -1,7 +1,9 @@
 /* ระบบงานบุคลากร — Frontend (Vanilla JS, ไม่ต้อง build) */
 (() => {
   'use strict';
-  const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร' }, window.APP_CONFIG || {});
+  const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
+  const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
+  const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
   const FB = !!(CFG.FIREBASE && CFG.FIREBASE.apiKey && CFG.FIREBASE.projectId);
   const DEMO = !FB;
   const IN_FRAME = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
@@ -128,7 +130,7 @@
   function renderLogin(msg) {
     document.title = `${CFG.APP_TITLE} | ${CFG.ORG_NAME}`;
     app.innerHTML = `${DEMO ? demoBar() : ''}
-    <div class="login-wrap"><form class="login-card" id="login-form" autocomplete="on">
+    <div class="login-wrap"><div class="login-stack">${loginLogo()}<form class="login-card" id="login-form" autocomplete="on">
       <div class="login-head"><div class="eyebrow">${esc(CFG.ORG_NAME)}</div><h1>${esc(CFG.APP_TITLE)}</h1></div>
       <div class="login-body">
         <label class="field"><span>ชื่อผู้ใช้ (ชื่อจริง ไม่ต้องมีคำนำหน้าและนามสกุล)</span>
@@ -140,7 +142,7 @@
         <button class="btn ghost sm" type="button" id="lg-forgot" style="align-self:center">ลืมรหัสผ่าน?</button>
         <div class="hint">เข้าสู่ระบบครั้งแรกใช้ <b>เบอร์โทรศัพท์</b> เป็นรหัสผ่าน (ตัวเลข 10 หลัก) หลังจากนั้นเปลี่ยนรหัสผ่านได้ 1 ครั้งที่เมนู “เปลี่ยนรหัสผ่าน” ถ้าลืมรหัสผ่าน ระบบจะส่งลิงก์ตั้งรหัสใหม่ไปที่อีเมลของคุณ
         ${DEMO ? `<br><br><b>บัญชีทดลอง</b> ครู: สมชาย / 0811111111 · ผอ.: admin / admin1234` : ''}</div>
-      </div></form></div>`;
+      </div></form>${loginCredit()}</div></div>`;
     $('#lg-forgot').onclick = () => forgotPassword($('#lg-user').value);
     $('#login-form').onsubmit = async e => {
       e.preventDefault();
@@ -170,7 +172,7 @@
 
   function renderSetup() {
     document.title = `ติดตั้งระบบ | ${CFG.APP_TITLE}`;
-    app.innerHTML = `<div class="login-wrap"><form class="login-card" id="setup-form">
+    app.innerHTML = `<div class="login-wrap"><div class="login-stack">${loginLogo()}<form class="login-card" id="setup-form">
       <div class="login-head"><div class="eyebrow">${esc(CFG.ORG_NAME)} · ติดตั้งครั้งแรก</div><h1>สร้างบัญชีผู้ดูแลระบบ</h1></div>
       <div class="login-body">
         <div class="hint">ทำครั้งเดียวหลังเชื่อมต่อ Firebase เสร็จ บัญชีนี้ใช้ชื่อผู้ใช้ <b>admin</b> และใช้อีเมลนี้สำหรับรีเซ็ตรหัสผ่าน</div>
@@ -178,7 +180,7 @@
         <label class="field"><span>รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)</span><input type="password" id="su-pass" required minlength="6" autocomplete="new-password"></label>
         <label class="field"><span>ยืนยันรหัสผ่าน</span><input type="password" id="su-pass2" required minlength="6" autocomplete="new-password"></label>
         <button class="btn primary" type="submit">สร้างบัญชีและเริ่มใช้งาน</button>
-      </div></form></div>`;
+      </div></form>${loginCredit()}</div></div>`;
     $('#setup-form').onsubmit = async e => {
       e.preventDefault();
       if ($('#su-pass').value !== $('#su-pass2').value) return toast('รหัสผ่านทั้งสองช่องไม่ตรงกัน', true);
