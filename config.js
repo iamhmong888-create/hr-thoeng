@@ -11,6 +11,8 @@ window.APP_CONFIG = {
     appId: "1:273105865895:web:6bb80cb1d9bd58775ddf82",
     measurementId: "G-C9CBYNZFVX"
   },
-  ORG_NAME: "สกร.ระดับอำเภอเทิง",
-  APP_TITLE: "ระบบงานบุคลากร"
+  ORG_NAME: "ศูนย์ส่งเสริมการเรียนรู้ระดับอำเภอเทิง",
+  APP_TITLE: "ระบบงานบุคลากร",
+  LOGO: "logo.png",                               // ไฟล์โลโก้ที่อัปโหลดไว้หน้าแรกของ GitHub (ถ้าเป็น .jpg ให้แก้เป็น logo.jpg)
+  CREDIT: "สร้างสรรค์โดย สกร.ระดับอำเภอเทิง"
 };
