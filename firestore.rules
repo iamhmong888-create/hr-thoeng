@@ -1,0 +1,77 @@
+rules_version = '2';
+// กฎความปลอดภัย Firestore — ระบบงานบุคลากร
+// คัดลอกทั้งหมดไปวางที่ Firebase Console > Firestore Database > Rules แล้วกด Publish
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function hasUser() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return hasUser() && me().role == 'admin'; }
+    function mySid() { return hasUser() ? me().staffId : '__none__'; }
+    // ใช้ได้ครั้งเดียวตอนติดตั้ง (ยังไม่มี config/setup และเอกสารนี้ถูกสร้างใน batch เดียวกัน)
+    function bootstrapping() {
+      return signedIn() && !exists(/databases/$(database)/documents/config/setup) && existsAfter(/databases/$(database)/documents/config/setup);
+    }
+
+    match /config/setup {
+      allow read: if true;
+      allow create: if signedIn() && !exists(/databases/$(database)/documents/config/setup)
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update, delete: if false;
+    }
+
+    match /config/meta {
+      allow read: if hasUser();
+      allow write: if isAdmin() || bootstrapping();
+    }
+
+    // ชื่อผู้ใช้ → อีเมลเข้าสู่ระบบ (อ่านได้ทีละชื่อเท่านั้น ดูรายการทั้งหมดไม่ได้)
+    match /logins/{key} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isAdmin() || bootstrapping();
+    }
+
+    // บัญชี → รหัสบุคลากร และสิทธิ์
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAdmin()
+        || (bootstrapping() && request.auth.uid == uid && request.resource.data.role == 'admin');
+      allow update, delete: if isAdmin();
+    }
+
+    // ข้อมูลบุคลากร: ครูอ่าน/แก้ได้เฉพาะของตนเอง และแก้ได้เฉพาะบางช่อง
+    match /staff/{sid} {
+      allow read: if isAdmin() || mySid() == sid;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        mySid() == sid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'prefix', 'phone', 'email', 'address', 'birthDay', 'birthMonth', 'birthYear', 'education', 'major',
+          'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'insignia',
+          'pwChanged', 'updatedAt'])
+        && (!('pwChanged' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.pwChanged == true)
+      );
+    }
+
+    // รายการพัฒนาตนเอง และรูปหลักฐาน (แยกเอกสาร เพื่อให้โหลดรายการได้เร็ว)
+    match /records/{rid} {
+      allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+      allow create: if hasUser() && request.resource.data.staffId is string && request.resource.data.staffId != ''
+        && (isAdmin() || request.resource.data.staffId == mySid());
+      allow update: if isAdmin()
+        || (hasUser() && resource.data.staffId == mySid() && request.resource.data.staffId == mySid());
+      allow delete: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+    }
+
+    match /photos/{rid} {
+      allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+      allow create: if hasUser() && (isAdmin() || request.resource.data.staffId == mySid());
+      allow update: if isAdmin()
+        || (hasUser() && resource.data.staffId == mySid() && request.resource.data.staffId == mySid());
+      allow delete: if isAdmin() || (hasUser() && (resource == null || resource.data.staffId == mySid()));
+    }
+  }
+}
