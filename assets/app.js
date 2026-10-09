@@ -67,6 +67,28 @@
     finally { if (--busyN <= 0) { busyN = 0; el.remove(); } }
   }
 
+  /* ปุ่มรูปตา แสดง/ซ่อนรหัสผ่าน — ใส่ให้ทุกช่องรหัสผ่านอัตโนมัติ */
+  const EYE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.4 18.4 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  function enhancePasswords(root) {
+    $$('input[type=password]:not([data-eye])', root).forEach(inp => {
+      inp.dataset.eye = '1';
+      const wrap = document.createElement('span'); wrap.className = 'pw-wrap';
+      inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp);
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pw-eye'; b.innerHTML = EYE; b.setAttribute('aria-label', 'แสดงรหัสผ่าน'); b.title = 'แสดงรหัสผ่าน';
+      b.onclick = () => {
+        const show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        b.innerHTML = show ? EYE_OFF : EYE;
+        b.setAttribute('aria-label', show ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'); b.title = b.getAttribute('aria-label');
+        inp.focus();
+      };
+      wrap.appendChild(b);
+    });
+  }
+  new MutationObserver(() => enhancePasswords(document)).observe(document.body, { childList: true, subtree: true });
+
   function toast(msg, err) {
     $$('.toast').forEach(t => t.remove());
     const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg; t.setAttribute('role', 'status');
@@ -736,12 +758,50 @@
         ${projs.map((p, i) => `<tr><td class="num muted">${i + 1}</td><td>${esc(p.name)}</td><td class="r" style="white-space:nowrap"><button class="btn sm" data-ren="${esc(p.id)}">แก้ชื่อ</button> <button class="btn sm danger" data-delp="${esc(p.id)}">ลบ</button></td></tr>`).join('') || '<tr><td colspan="3" class="muted">ยังไม่มีโครงการในปีนี้</td></tr>'}
         </tbody></table></div>` : '<p class="muted" style="margin:0">เพิ่มปีงบประมาณก่อน แล้วจึงเพิ่มโครงการ</p>'}
       </section>
+      <section class="panel"><h3>บัญชีผู้ดูแลระบบ</h3>
+        <p style="margin:0 0 .8rem">ผู้ดูแลระบบทุกบัญชีเห็นข้อมูลครูทุกคน และจัดการปีงบ โครงการ และบุคลากรได้เท่ากัน เหมาะสำหรับ ผอ. และหัวหน้างานบุคลากร</p>
+        <div id="adm-list"><div class="muted small">กำลังโหลด…</div></div>
+        <div style="margin-top:.8rem"><button class="btn primary" id="adm-add">+ เพิ่มบัญชีผู้ดูแลระบบ</button></div>
+      </section>
       <section class="panel"><h3>นำเข้าข้อมูลบุคลากรและสร้างบัญชีเข้าสู่ระบบ</h3>
         <p style="margin:0 0 .8rem">เลือกไฟล์ <b>staff_import.json</b> ระบบจะบันทึกข้อมูลบุคลากร และสร้างบัญชีให้ทุกคน (ชื่อผู้ใช้ = ชื่อจริง, รหัสผ่าน = เบอร์โทร) ใช้เวลาประมาณ 1 วินาทีต่อคน นำเข้าซ้ำได้ ข้อมูลเดิมที่รหัสตรงกันจะถูกอัปเดต</p>
         <div class="toolbar"><label class="btn primary" for="im-file">เลือกไฟล์ .json และนำเข้า</label><input type="file" id="im-file" accept=".json,application/json" hidden>
           ${FB ? '<button class="btn" id="im-acc">สร้างบัญชีให้คนที่ยังไม่มีบัญชี</button>' : ''}</div>
         <div id="im-out" style="margin-top:.8rem"></div>
       </section>`;
+    const drawAdmins = list => {
+      const box = $('#adm-list'); if (!box) return;
+      box.innerHTML = `<div class="table-wrap"><table><thead><tr><th>ชื่อ / ตำแหน่ง</th><th>ชื่อผู้ใช้</th><th>อีเมล (รีเซ็ตรหัสผ่าน)</th><th></th></tr></thead><tbody>
+        ${list.map(a => `<tr><td>${esc(a.name)}${a.self ? ' <span class="chip good">คุณ</span>' : ''}</td><td><b>${esc(a.username)}</b></td><td class="small">${esc(a.email || '—')}</td>
+          <td class="r">${a.self ? '' : `<button class="btn sm danger" data-deladm="${esc(a.uid)}">ลบ</button>`}</td></tr>`).join('')}
+        </tbody></table></div>`;
+      $$('[data-deladm]', box).forEach(b => b.onclick = async () => {
+        const a = list.find(x => x.uid === b.dataset.deladm);
+        if (!(await confirmBox(`ลบบัญชีผู้ดูแล “${a.name}” (ชื่อผู้ใช้ ${a.username})? บัญชีนี้จะเข้าระบบไม่ได้อีก`, 'ลบบัญชี'))) return;
+        try { drawAdmins(await busy(() => api('deleteAdmin', { uid: a.uid }))); toast('ลบบัญชีแล้ว'); } catch (e) { }
+      });
+    };
+    api('listAdmins').then(drawAdmins).catch(e => { const box = $('#adm-list'); if (box) box.innerHTML = `<div class="chip bad">${esc(e.message)}</div>`; });
+    $('#adm-add').onclick = () => {
+      const m = modal({
+        title: 'เพิ่มบัญชีผู้ดูแลระบบ',
+        body: `<div class="grid">
+          <label class="field wide"><span>ชื่อ-สกุล / ตำแหน่ง</span><input type="text" id="na-name" placeholder="เช่น นายสมศักดิ์ ใจดี (ผู้อำนวยการ)"></label>
+          <label class="field"><span>ชื่อผู้ใช้ (ใช้เข้าสู่ระบบ ไม่มีเว้นวรรค)</span><input type="text" id="na-user" placeholder="เช่น director หรือ ผอ"></label>
+          <label class="field"><span>อีเมล (ใช้รีเซ็ตรหัสผ่าน)</span><input type="email" id="na-email" placeholder="name@gmail.com"></label>
+          <label class="field"><span>รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)</span><input type="password" id="na-pass" autocomplete="new-password"></label>
+          <label class="field"><span>ยืนยันรหัสผ่าน</span><input type="password" id="na-pass2" autocomplete="new-password"></label>
+        </div><p class="small muted" style="margin:0">แจ้งชื่อผู้ใช้และรหัสผ่านให้เจ้าของบัญชี เขาเปลี่ยนรหัสผ่านเองได้ที่เมนู “เปลี่ยนรหัสผ่าน”</p>`,
+        foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="na-ok">สร้างบัญชี</button>`
+      });
+      $('#na-ok', m.el).onclick = async () => {
+        if ($('#na-pass', m.el).value !== $('#na-pass2', m.el).value) return toast('รหัสผ่านทั้งสองช่องไม่ตรงกัน', true);
+        try {
+          const list = await busy(() => api('addAdmin', { name: $('#na-name', m.el).value, username: $('#na-user', m.el).value, email: $('#na-email', m.el).value, password: $('#na-pass', m.el).value }));
+          m.close(); drawAdmins(list); toast('สร้างบัญชีผู้ดูแลระบบแล้ว');
+        } catch (e) { }
+      };
+    };
     const showImport = d => {
       $('#im-out').innerHTML = `<div class="notice info"><div class="grow">${d.added !== undefined ? `เพิ่มใหม่ ${d.added} คน · อัปเดต ${d.updated} คน · ` : ''}สร้างบัญชีสำเร็จ ${d.created || 0} คน${d.pending ? ` · ยังไม่มีบัญชี ${d.pending} คน` : ''}
         ${d.warnings && d.warnings.length ? `<ul style="margin:.5rem 0 0;padding-left:1.2rem">${d.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : ''}</div></div>`;
@@ -804,7 +864,7 @@
     const pub = s => { const o = Object.assign({}, s); delete o.pw; o.pwChanged = !!s.pwChanged; o.canChangePassword = !s.pwChanged; return o; };
     const meta = () => ({ years: db.years.slice().sort((a, b) => b - a), projects: db.projects.slice() });
     const digits = s => String(s || '').replace(/\D/g, '').replace(/^0+/, '');
-    const me = ses => ses.id === 'ADMIN' ? { role: 'admin', user: { id: 'ADMIN', prefix: '', firstName: 'ผู้ดูแลระบบ', lastName: '(ทดลอง)', isAdminAccount: true, canChangePassword: true } } : { role: ses.role, user: pub(db.staff.find(s => s.id === ses.id)) };
+    const me = ses => ses.id === 'ADMIN' ? { role: 'admin', user: { id: 'ADMIN', prefix: '', firstName: ses.name || 'ผู้ดูแลระบบ', lastName: ses.name ? '' : '(ทดลอง)', isAdminAccount: true, canChangePassword: true } } : { role: ses.role, user: pub(db.staff.find(s => s.id === ses.id)) };
     const TEDIT = ['prefix', 'phone', 'email', 'address', 'birthDay', 'birthMonth', 'birthYear', 'education', 'major', 'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'insignia'];
     async function handle(q) {
       load(); await new Promise(r => setTimeout(r, 120));
@@ -813,6 +873,8 @@
       if (q.action === 'forgotPassword') return err('โหมดทดลองไม่ส่งอีเมล ในระบบจริงจะส่งลิงก์ตั้งรหัสผ่านใหม่ไปที่อีเมลของครู');
       if (q.action === 'login') {
         const u = String(q.username || '').replace(/\s+/g, ''), p = String(q.password || '').trim();
+        const xa = (db.admins || []).find(a => a.username === u);
+        if (xa) { if (p !== xa.pass) return err('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'); const t = 'T' + Math.random(); sessions[t] = { id: 'ADMIN', role: 'admin', name: xa.name }; return ok(Object.assign({ token: t }, me(sessions[t]))); }
         if (u.toLowerCase() === db.admin.user) { if (p !== db.admin.pass) return err('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'); const t = 'T' + Math.random(); sessions[t] = { id: 'ADMIN', role: 'admin' }; return ok(Object.assign({ token: t }, me(sessions[t]))); }
         const s = db.staff.find(s => s.firstName.replace(/\s+/g, '') === u.replace(/^(นางสาว|น\.ส\.|นาย|นาง)/, '')) || db.staff.find(s => s.firstName === u);
         if (!s || !(s.pw ? p === s.pw : digits(p) && digits(p) === digits(s.phone))) return err('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
@@ -867,6 +929,16 @@
         switch (q.action) {
           case 'listStaff': return ok(db.staff.map(pub));
           case 'createAccounts': return ok({ created: 0, pending: 0, warnings: [] });
+          case 'listAdmins': return ok([{ uid: 'ADMIN', name: 'ผู้ดูแลระบบ (บัญชีแรก)', username: db.admin.user, email: '', self: ses.id === 'ADMIN' }].concat((db.admins || []).map(a => ({ uid: a.uid, name: a.name, username: a.username, email: a.email, self: false }))));
+          case 'addAdmin': {
+            const u = String(q.username || '').trim();
+            if (!q.name || !u) return err('กรุณากรอกชื่อและชื่อผู้ใช้');
+            if (String(q.password || '').length < 6) return err('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+            if (u === db.admin.user || db.staff.some(s => s.firstName === u) || (db.admins || []).some(a => a.username === u)) return err('ชื่อผู้ใช้นี้มีในระบบแล้ว');
+            (db.admins = db.admins || []).push({ uid: 'A' + Date.now(), name: q.name, username: u, email: q.email, pass: q.password }); save();
+            return handle({ action: 'listAdmins', token: q.token });
+          }
+          case 'deleteAdmin': db.admins = (db.admins || []).filter(a => a.uid !== q.uid); save(); return handle({ action: 'listAdmins', token: q.token });
           case 'importStaff': {
             let added = 0, updated = 0;
             (q.list || []).forEach(src => { if (!src.id || !src.firstName) return; const s = staff(src.id); if (s) { Object.assign(s, src); updated++; } else { db.staff.push(Object.assign({ pw: '', pwChanged: false }, src)); added++; } });

@@ -61,7 +61,7 @@ export function create(CFG) {
       const s = await getDoc(D('users', u.uid));
       if (!s.exists()) { await signOut(auth); throw new Error('บัญชีนี้ยังไม่ได้รับสิทธิ์ใช้งานระบบ กรุณาติดต่อผู้ดูแลระบบ'); }
       const d = s.data();
-      ctx = { uid: u.uid, email: u.email, staffId: d.staffId || '', role: d.role === 'admin' ? 'admin' : 'teacher' };
+      ctx = { uid: u.uid, email: u.email, staffId: d.staffId || '', role: d.role === 'admin' ? 'admin' : 'teacher', name: d.name || '', username: d.username || '' };
     }
     return ctx;
   }
@@ -82,7 +82,7 @@ export function create(CFG) {
     return s.data();
   }
   async function meResult(c) {
-    if (!c.staffId) return { role: 'admin', user: { id: 'ADMIN', prefix: '', firstName: 'ผู้ดูแลระบบ', lastName: '', isAdminAccount: true, canChangePassword: true } };
+    if (!c.staffId) return { role: 'admin', user: { id: 'ADMIN', uid: c.uid, prefix: '', firstName: c.name || 'ผู้ดูแลระบบ', lastName: '', username: c.username || 'admin', isAdminAccount: true, canChangePassword: true } };
     return { role: c.role, user: pub(await getStaff(c.staffId)) };
   }
 
@@ -375,6 +375,45 @@ export function create(CFG) {
       return Object.assign({ added, updated }, acc);
     },
     async createAccounts() { needAdmin(await me()); return createMissingAccounts(); },
+
+    /* ---------- บัญชีผู้ดูแลระบบเพิ่มเติม (ผอ., หัวหน้างานบุคลากร) ---------- */
+    async listAdmins() {
+      const c = await me(); needAdmin(c);
+      const snap = await getDocs(query(C('users'), where('staffId', '==', '')));
+      return snap.docs.map(x => { const d = x.data(); return { uid: x.id, name: d.name || 'ผู้ดูแลระบบ (บัญชีแรก)', username: d.username || 'admin', email: d.email || '', self: x.id === c.uid }; })
+        .sort((a, b) => (a.username === 'admin' ? -1 : b.username === 'admin' ? 1 : a.name.localeCompare(b.name, 'th')));
+    },
+    async addAdmin(q) {
+      needAdmin(await me());
+      const name = String(q.name || '').trim(), username = String(q.username || '').trim();
+      const email = String(q.email || '').trim().toLowerCase(), pw = String(q.password || '');
+      if (!name) throw new Error('กรุณากรอกชื่อ-ตำแหน่ง');
+      if (!username || /\s/.test(username)) throw new Error('ชื่อผู้ใช้ต้องไม่ว่างและไม่มีช่องว่าง');
+      if (!validEmail(email)) throw new Error('กรุณากรอกอีเมลที่ถูกต้อง');
+      if (pw.length < 6) throw new Error('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+      if ((await getDoc(D('logins', nameKey(username)))).exists()) throw new Error('ชื่อผู้ใช้นี้มีในระบบแล้ว (ซ้ำกับครูหรือผู้ดูแลคนอื่น)');
+      const sec = initializeApp(CFG.FIREBASE, 'adm' + Date.now());
+      let uid;
+      try { uid = (await createUserWithEmailAndPassword(getAuth(sec), email, pw)).user.uid; }
+      catch (e) { throw new Error(authMsg(e)); }
+      finally { deleteApp(sec).catch(() => { }); }
+      const b = writeBatch(db);
+      b.set(D('users', uid), { staffId: '', role: 'admin', name, username, email });
+      b.set(D('logins', nameKey(username)), { email });
+      await b.commit();
+      return actions.listAdmins();
+    },
+    async deleteAdmin(q) {
+      const c = await me(); needAdmin(c);
+      if (q.uid === c.uid) throw new Error('ลบบัญชีที่กำลังใช้งานอยู่ไม่ได้');
+      const s = await getDoc(D('users', q.uid));
+      if (!s.exists() || s.data().staffId) throw new Error('ไม่พบบัญชีผู้ดูแล');
+      const b = writeBatch(db);
+      b.delete(D('users', q.uid));
+      b.delete(D('logins', nameKey(s.data().username || 'admin')));
+      await b.commit();
+      return actions.listAdmins();
+    },
 
     async addYear(q) {
       needAdmin(await me());
