@@ -262,7 +262,8 @@ export function create(CFG) {
     async listRecords(q) {
       const c = await me();
       const cons = [];
-      if (c.role !== 'admin') cons.push(where('staffId', '==', c.staffId));
+      // mine = หน้า "การพัฒนาตนเองของฉัน": แสดงเฉพาะของผู้ใช้เอง แม้จะมีสิทธิ์ผู้บริหาร
+      if (c.role !== 'admin' || q.mine) cons.push(where('staffId', '==', c.staffId || '__none__'));
       else if (q.staffId) cons.push(where('staffId', '==', q.staffId));
       if (q.year) cons.push(where('year', '==', String(q.year)));
       const snap = await getDocs(query(C('records'), ...cons));

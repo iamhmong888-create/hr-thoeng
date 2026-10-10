@@ -401,7 +401,7 @@
     const box = $('#dev-body'); if (!box) return;
     if (!S.meta.years.length) { box.innerHTML = `<div class="empty-state">ยังไม่มีปีงบประมาณในระบบ กรุณาแจ้งผู้ดูแลระบบให้เพิ่มปีงบประมาณ</div>`; return; }
     let list;
-    try { list = await busy(() => api('listRecords', { year: S.fy })); } catch (e) { return; }
+    try { list = await busy(() => api('listRecords', { year: S.fy, mine: true })); } catch (e) { return; }
     if (!box.isConnected) return;
     const projs = S.meta.projects.filter(p => p.year === S.fy);
     box.innerHTML = `
@@ -922,7 +922,7 @@
           }
           case 'listRecords': {
             let r = db.records.slice();
-            if (!isAdmin) r = r.filter(x => x.staffId === ses.id); else if (q.staffId) r = r.filter(x => x.staffId === q.staffId);
+            if (!isAdmin || q.mine) r = r.filter(x => x.staffId === ses.id); else if (q.staffId) r = r.filter(x => x.staffId === q.staffId);
             if (q.year) r = r.filter(x => x.year === q.year);
             return ok(r.sort((a, b) => b.startDate.localeCompare(a.startDate)));
           }
