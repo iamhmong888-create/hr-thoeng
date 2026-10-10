@@ -217,7 +217,7 @@
 
   /* ---------------- shell ---------------- */
   const TABS = {
-    teacher: [['profile', 'ประวัติส่วนตัว'], ['dev', 'ประวัติการพัฒนาตนเอง'], ['password', 'เปลี่ยนรหัสผ่าน']],
+    teacher: [['profile', 'ประวัติส่วนตัว'], ['dev', 'การพัฒนาตนเอง'], ['password', 'เปลี่ยนรหัสผ่าน']],
     admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ['records', 'รายการพัฒนาตนเอง'], ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
   };
   function demoBar() { return `<div class="demo-bar">โหมดทดลอง: ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ใส่ค่า FIREBASE ใน config.js เพื่อใช้งานจริง</div>`; }
@@ -228,11 +228,11 @@
     if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
     document.title = `${CFG.APP_TITLE} | ${CFG.ORG_NAME}`;
     app.innerHTML = `${DEMO ? demoBar() : ''}
-    <header class="topbar"><div class="topbar-in">
+    <div class="appbar"><header class="topbar"><div class="topbar-in">
       <div class="brand"><b>${esc(CFG.APP_TITLE)}</b><small>${esc(CFG.ORG_NAME)}${S.role === 'admin' ? ' · ผู้บริหาร' : ''}</small></div>
       <div class="who"><span class="name">${esc(fullName(S.user))}</span><button class="btn sm" id="btn-logout">ออกจากระบบ</button></div>
     </div></header>
-    <nav class="tabs" aria-label="เมนู"><div class="tabs-in">${tabs.map(([k, l]) => `<button class="tab ${k === S.tab ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div></nav>
+    <nav class="tabs" aria-label="เมนู"><div class="tabs-in">${tabs.map(([k, l]) => `<button class="tab ${k === S.tab ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div></nav></div>
     <main id="view"></main>`;
     $('#btn-logout').onclick = () => logout();
     $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; store.set('hr_tab_' + S.role, S.tab); render(); });
@@ -385,7 +385,7 @@
   }
 
   async function viewDev(v) {
-    v.innerHTML = `<div class="page-head"><div class="grow"><h1>ประวัติการพัฒนาตนเอง</h1><div class="muted small">ศึกษาดูงาน อบรม ประชุมสัมมนา และการพัฒนาตนเองตามโครงการพัฒนาบุคลากร</div></div>
+    v.innerHTML = `<div class="page-head"><div class="grow"><h1>การพัฒนาตนเอง</h1><div class="muted small">ศึกษาดูงาน อบรม ประชุมสัมมนา และการพัฒนาตนเองตามโครงการพัฒนาบุคลากร</div></div>
       <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('dev-fy', S.fy)}</label></div></div>
       <div class="print-only"><h2>${esc(fullName(S.user))}</h2></div>
       <div id="dev-body" class="stack"><div class="empty-state">กำลังโหลด…</div></div>`;

@@ -90,7 +90,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); outline: n
 .hint b { color: var(--fg); }
 
 /* ---------- Shell ---------- */
-.topbar { background: var(--ink); color: var(--ink-fg); position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; border-bottom: 3px solid var(--accent); }
+/* แถบชื่อระบบ + เมนู ติดด้านบนไปด้วยกันเวลาเลื่อนหน้า (เมนูไม่ถูกบัง) */
+.appbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; box-shadow: 0 2px 8px rgba(20, 35, 60, .08); }
+.topbar { background: var(--ink); color: var(--ink-fg); border-bottom: 3px solid var(--accent); }
 .topbar-in { max-width: 1080px; margin: 0 auto; padding: .7rem 16px; display: flex; align-items: center; gap: 1rem; }
 .brand { display: flex; flex-direction: column; min-width: 0; }
 .brand b { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; }
