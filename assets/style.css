@@ -38,6 +38,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--font-body); -webkit-font-smoothing: antialiased; }
 h1, h2, h3 { font-family: var(--font-display); font-weight: 500; line-height: 1.3; text-wrap: balance; margin: 0; }
 h1 { font-size: 1.5rem; } h2 { font-size: 1.2rem; } h3 { font-size: 1.02rem; }
@@ -65,6 +66,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 input[type=text], input[type=password], input[type=number], input[type=email], input[type=tel], select, textarea {
   width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: .55em .75em; min-width: 0;
 }
+/* ช่องกรอกต้องไม่เล็กกว่า 16px มิฉะนั้นมือถือจะซูมหน้าเว็บเองเมื่อแตะ */
+input[type=text], input[type=password], input[type=number], input[type=email], input[type=tel], select, textarea { font-size: max(16px, 1rem); }
 textarea { min-height: 7rem; resize: vertical; line-height: 1.6; }
 input:focus, select:focus, textarea:focus { border-color: var(--ink); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 18%, transparent); }
 .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -199,6 +202,9 @@ td.r, th.r { text-align: right; }
 
 .print-only { display: none; }
 @media (max-width: 620px) {
+  .tabs-in { flex-wrap: wrap; overflow-x: visible; gap: 0 .1rem; padding: 0 10px; }
+  .tab { padding: .55rem .6rem; font-size: .92rem; }
+  .topbar-in { padding: .55rem 16px; }
   .rec { grid-template-columns: 1fr; }
   .rec .photos { order: 2; }
   .thumb { width: calc(50% - .25rem); height: auto; aspect-ratio: 4/3; }

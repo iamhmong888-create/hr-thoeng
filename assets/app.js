@@ -8,6 +8,13 @@
   const DEMO = !FB;
   const IN_FRAME = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
   const app = document.getElementById('app');
+  // iPhone/iPad (Safari, LINE ฯลฯ) จะซูมหน้าเว็บเองเมื่อแตะช่องกรอก แล้วไม่ซูมกลับ
+  // กำหนด maximum-scale=1 เฉพาะ iOS เพื่อปิดการซูมอัตโนมัติ (ผู้ใช้ยังใช้สองนิ้วขยายเองได้)
+  (() => {
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const m = document.querySelector('meta[name=viewport]');
+    if (ios && m) m.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover');
+  })();
 
   /* ---------------- utils ---------------- */
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
