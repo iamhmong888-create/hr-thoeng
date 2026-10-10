@@ -143,6 +143,13 @@ main { max-width: 1080px; margin: 0 auto; padding: 1.5rem 16px 4rem; display: fl
 .rec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 1rem 1.1rem; display: grid; grid-template-columns: 1fr auto; gap: .9rem 1.2rem; }
 .rec .body { min-width: 0; display: flex; flex-direction: column; gap: .35rem; }
 .rec .meta { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .875rem; color: var(--muted); }
+.review-note { border-radius: 8px; padding: .55rem .8rem; font-size: .93rem; display: flex; flex-direction: column; gap: .15rem; margin-top: .3rem; }
+.review-note.approved { background: var(--good-soft); }
+.review-note.revise { background: var(--bad-soft); }
+.review-note.revise > b { color: var(--bad); }
+.review-note.approved > b { color: var(--good); }
+.rec.st-revise { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+.notice.revise-alert { background: var(--bad-soft); color: var(--fg); }
 .rec .lbl { font-weight: 700; color: var(--fg); }
 .rec .know { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-2); border-radius: 8px; padding: .6rem .8rem; font-size: .95rem; }
 .rec .know.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }

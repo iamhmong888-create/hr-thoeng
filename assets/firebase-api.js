@@ -149,7 +149,7 @@ export function create(CFG) {
 
   function recOut(id, r) {
     const o = { id };
-    ['staffId', ...REC_FIELDS, 'projectName', 'createdAt', 'updatedAt'].forEach(k => o[k] = r[k] === undefined ? '' : String(r[k]));
+    ['staffId', ...REC_FIELDS, 'projectName', 'createdAt', 'updatedAt', 'review', 'reviewNote', 'reviewBy', 'reviewAt'].forEach(k => o[k] = r[k] === undefined ? '' : String(r[k]));
     o.photo1 = r.hasPhoto1 ? `fs:${id}:1` : '';
     o.photo2 = r.hasPhoto2 ? `fs:${id}:2` : '';
     return o;
@@ -286,9 +286,9 @@ export function create(CFG) {
         const s = await getDoc(D('records', id));
         if (!s.exists()) throw new Error('ไม่พบรายการ');
         old = s.data(); staffId = old.staffId;
-        if (!isAdmin && staffId !== c.staffId) throw new Error('ไม่มีสิทธิ์แก้ไขรายการนี้');
+        if (!c.staffId || staffId !== c.staffId) throw new Error('แก้ไขได้เฉพาะรายการของตนเอง');
       } else {
-        staffId = isAdmin && r.staffId ? r.staffId : c.staffId;
+        staffId = c.staffId;
         if (!staffId) throw new Error('บัญชีผู้ดูแลระบบบันทึกรายการของตนเองไม่ได้');
         id = doc(C('records')).id;
       }
@@ -298,7 +298,8 @@ export function create(CFG) {
       const m = await getMeta();
       if (!m.years.includes(String(r.year))) throw new Error('ไม่พบปีงบประมาณนี้');
       const p = m.projects.find(p => p.id === r.projectId);
-      const out = { staffId, updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), projectName: p ? p.name : 'อื่น ๆ (นอกโครงการ)' };
+      // แก้ไขรายการแล้ว สถานะกลับเป็น "รอตรวจ" เพื่อให้ผู้บริหารตรวจใหม่
+      const out = { staffId, updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), projectName: p ? p.name : 'อื่น ๆ (นอกโครงการ)', review: '', reviewNote: '', reviewBy: '', reviewAt: '' };
       REC_FIELDS.forEach(k => out[k] = String(r[k] === undefined || r[k] === null ? '' : r[k]).trim());
       const photos = q.photos || ['keep', 'keep'];
       const ph = { staffId };
@@ -320,9 +321,26 @@ export function create(CFG) {
       const c = await me();
       const s = await getDoc(D('records', q.id));
       if (!s.exists()) throw new Error('ไม่พบรายการ');
-      if (c.role !== 'admin' && s.data().staffId !== c.staffId) throw new Error('ไม่มีสิทธิ์ลบรายการนี้');
+      if (!c.staffId || s.data().staffId !== c.staffId) throw new Error('ลบได้เฉพาะรายการของตนเอง');
       const b = writeBatch(db); b.delete(D('records', q.id)); b.delete(D('photos', q.id)); await b.commit();
       return true;
+    },
+
+    /* ผู้บริหารตรวจรายการ: approved = ตรวจแล้ว, revise = ส่งกลับแก้ไข, '' = ยกเลิกผลตรวจ */
+    async reviewRecord(q) {
+      const c = await me(); needAdmin(c);
+      const status = String(q.status || '');
+      if (!['approved', 'revise', ''].includes(status)) throw new Error('สถานะไม่ถูกต้อง');
+      const note = String(q.note || '').trim();
+      if (status === 'revise' && !note) throw new Error('กรุณาเขียนสิ่งที่ต้องแก้ไข');
+      const s = await getDoc(D('records', q.id));
+      if (!s.exists()) throw new Error('ไม่พบรายการ');
+      if (c.staffId && s.data().staffId === c.staffId) throw new Error('ตรวจรายการของตนเองไม่ได้');
+      let by = c.name || 'ผู้ดูแลระบบ';
+      if (c.staffId) { const st = await getStaff(c.staffId); by = [st.prefix, st.firstName].join('') + ' ' + (st.lastName || ''); }
+      const up = status ? { review: status, reviewNote: note, reviewBy: by.trim(), reviewAt: nowISO() } : { review: '', reviewNote: '', reviewBy: '', reviewAt: '' };
+      await updateDoc(D('records', q.id), up);
+      return recOut(q.id, Object.assign(s.data(), up));
     },
 
     /* ---------- admin ---------- */

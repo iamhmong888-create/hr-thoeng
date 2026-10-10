@@ -345,22 +345,50 @@
   /* ---------------- dev records (teacher) ---------------- */
   const yearSelect = (id, val, extraAll) => `<select id="${id}">${extraAll ? '<option value="">ทุกปีงบประมาณ</option>' : ''}${S.meta.years.map(y => `<option value="${y}" ${y === val ? 'selected' : ''}>ปีงบประมาณ พ.ศ. ${y}</option>`).join('')}</select>`;
 
+  const REVIEW = { approved: ['good', 'ตรวจแล้ว'], revise: ['bad', 'ส่งกลับแก้ไข'], '': ['warn', 'รอตรวจ'] };
+  const reviewChip = r => { const [c, t] = REVIEW[r.review || ''] || REVIEW['']; return `<span class="chip ${c}">${t}</span>`; };
+  const reviewBox = r => r.review ? `<div class="review-note ${esc(r.review)}"><b>${r.review === 'approved' ? 'ผลการตรวจ: ตรวจแล้ว' : 'ส่งกลับให้แก้ไข'}</b> <span class="muted small">โดย ${esc(r.reviewBy || '-')}${r.reviewAt ? ' · ' + esc(thDate(r.reviewAt, true)) : ''}</span>${r.reviewNote ? `<div>${esc(r.reviewNote)}</div>` : ''}</div>` : '';
+
+  // mode: 'own' = เจ้าของ (แก้ไข/ลบ) · 'review' = ผู้บริหารตรวจ · 'view' = ดูอย่างเดียว
   function recCard(r, opts = {}) {
+    const mode = opts.mode || 'own';
     const ph = ['photo1', 'photo2'].map((k, i) => r[k] ? `<img class="thumb" loading="lazy" src="${esc(photoUrl(r[k]) || BLANK)}" data-full="${esc(photoUrl(r[k]))}" ${/^fs:/.test(r[k]) ? `data-fs="${esc(r[k])}"` : ''} alt="รูปหลักฐาน ${i + 1}: ${esc(r.title)}">` : `<div class="thumb none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
     const long = (r.knowledge || '').length > 260;
-    return `<article class="rec" data-id="${esc(r.id)}">
+    return `<article class="rec st-${esc(r.review || 'pending')}" data-id="${esc(r.id)}" data-who="${esc(opts.who || '')}">
       <div class="body">
-        <div class="meta"><span class="chip ink">${esc(r.type || 'พัฒนาตนเอง')}</span><span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
+        <div class="meta">${reviewChip(r)}<span class="chip ink">${esc(r.type || 'พัฒนาตนเอง')}</span><span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
         <h3>${esc(r.title)}</h3>
         ${opts.who ? `<div class="small"><b>${esc(opts.who)}</b></div>` : ''}
         <div class="meta"><span><b class="lbl">โครงการ:</b> ${esc(r.projectName || '—')}</span>${r.place ? `<span><b class="lbl">สถานที่:</b> ${esc(r.place)}</span>` : ''}${r.organizer ? `<span><b class="lbl">จัดโดย:</b> ${esc(r.organizer)}</span>` : ''}</div>
         <div class="small" style="margin-top:.2rem"><b class="lbl">ความรู้ที่ได้รับ</b></div>
         <div class="know ${long ? 'clamp' : ''}">${esc(r.knowledge || '—')}</div>
         ${long ? `<button class="btn ghost sm no-print" data-more style="align-self:flex-start">อ่านทั้งหมด</button>` : ''}
+        ${reviewBox(r)}
       </div>
       <div class="photos">${ph}</div>
-      ${opts.ops === false ? '' : `<div class="ops"><button class="btn sm" data-edit>แก้ไข</button><button class="btn sm danger" data-del>ลบ</button></div>`}
+      ${mode === 'own' ? `<div class="ops"><button class="btn sm" data-edit>แก้ไข</button><button class="btn sm danger" data-del>ลบ</button></div>`
+        : mode === 'review' ? `<div class="ops"><button class="btn sm primary" data-review>${r.review ? 'เปลี่ยนผลการตรวจ' : 'ตรวจรายการนี้'}</button></div>` : ''}
     </article>`;
+  }
+
+  function reviewForm(r, who, reload) {
+    const m = modal({
+      title: 'ตรวจรายการพัฒนาตนเอง', size: 'sm',
+      body: `<div><b>${esc(who || '')}</b><div>${esc(r.title)}</div><div class="small muted">${esc(thRange(r.startDate, r.endDate))} · สถานะปัจจุบัน ${reviewChip(r)}</div></div>
+        <label class="field"><span>ความเห็น / สิ่งที่ต้องแก้ไข (จำเป็นเมื่อส่งกลับแก้ไข)</span><textarea id="rv-note" rows="4" placeholder="เช่น กรุณาเพิ่มรายละเอียดการนำความรู้ไปใช้ หรือแนบรูปให้ครบ 2 รูป">${esc(r.reviewNote || '')}</textarea></label>`,
+      foot: `${r.review ? '<button class="btn ghost" id="rv-clear">ยกเลิกผลตรวจ</button>' : ''}<button class="btn danger" id="rv-revise">ส่งกลับให้แก้ไข</button><button class="btn primary" id="rv-ok">ตรวจแล้ว</button>`
+    });
+    const send = async status => {
+      const note = $('#rv-note', m.el).value.trim();
+      if (status === 'revise' && !note) return toast('กรุณาเขียนสิ่งที่ต้องแก้ไข เพื่อให้ครูทราบ', true);
+      try {
+        await busy(() => api('reviewRecord', { id: r.id, status, note }));
+        m.close(); toast(status === 'approved' ? 'บันทึกผล: ตรวจแล้ว' : status === 'revise' ? 'ส่งกลับให้แก้ไขแล้ว' : 'ยกเลิกผลตรวจแล้ว'); reload && reload();
+      } catch (e) { }
+    };
+    $('#rv-ok', m.el).onclick = () => send('approved');
+    $('#rv-revise', m.el).onclick = () => send('revise');
+    const cl = $('#rv-clear', m.el); if (cl) cl.onclick = () => send('');
   }
 
   async function loadPhotos(recs) {
@@ -381,6 +409,7 @@
       const r = list.find(x => x.id === el.dataset.id);
       const more = $('[data-more]', el); if (more) more.onclick = () => { $('.know', el).classList.toggle('clamp'); more.textContent = $('.know', el).classList.contains('clamp') ? 'อ่านทั้งหมด' : 'ย่อ'; };
       const ed = $('[data-edit]', el); if (ed) ed.onclick = async () => { try { await busy(() => loadPhotos([r])); } catch (e) { } recordForm(r, reload); };
+      const rv = $('[data-review]', el); if (rv) rv.onclick = () => reviewForm(r, el.dataset.who, reload);
       const dl = $('[data-del]', el); if (dl) dl.onclick = async () => {
         if (!(await confirmBox(`ลบรายการ “${r.title}” และรูปหลักฐานทั้งหมด?`, 'ลบรายการ'))) return;
         try { await busy(() => api('deleteRecord', { id: r.id })); toast('ลบรายการแล้ว'); reload(); } catch (e) { }
@@ -413,7 +442,8 @@
       </div>
       <div class="page-head no-print" style="margin-top:.4rem"><div class="grow"><h2>รายการ ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)}</div></div>
         <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="dev-add">+ เพิ่มรายการพัฒนาตนเอง</button></div></div>
-      <div class="recs">${list.length ? list.map(r => recCard(r)).join('') : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง</div>`}</div>`;
+      ${list.some(r => r.review === 'revise') ? `<div class="notice revise-alert"><div class="grow"><b>มี ${list.filter(r => r.review === 'revise').length} รายการที่ผู้บริหารส่งกลับให้แก้ไข</b> อ่านความเห็นในรายการ แล้วกด “แก้ไข” เพื่อปรับปรุง เมื่อบันทึกแล้วสถานะจะกลับเป็น “รอตรวจ”</div></div>` : ''}
+      <div class="recs">${list.length ? list.map(r => recCard(r, { mode: 'own' })).join('') : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง</div>`}</div>`;
     $('#dev-add').onclick = () => recordForm({ year: S.fy }, loadDev);
     $('#dev-pdf').onclick = () => reportPerson(S.user, list, { year: S.fy, profile: false });
     bindRecList(box, list, loadDev);
@@ -446,7 +476,7 @@
       + `<option value="OTHER" ${r.projectId === 'OTHER' ? 'selected' : ''}>อื่น ๆ (นอกโครงการ / พัฒนาตนเอง)</option>`;
     const m = modal({
       title: isNew ? 'เพิ่มรายการพัฒนาตนเอง' : 'แก้ไขรายการพัฒนาตนเอง',
-      body: `
+      body: `${r.review === 'approved' ? '<div class="notice info"><div class="grow">รายการนี้ผู้บริหารตรวจแล้ว ถ้าบันทึกการแก้ไข สถานะจะกลับเป็น “รอตรวจ”</div></div>' : ''}${r.review === 'revise' ? `<div class="review-note revise"><b>สิ่งที่ต้องแก้ไข</b><div>${esc(r.reviewNote || '')}</div></div>` : ''}
       <div class="grid">
         <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('rf-year', r.year || S.fy)}</label>
         <label class="field"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>
@@ -547,6 +577,7 @@
         <div class="stat"><div class="v">${recs.length}</div><div class="k">รายการพัฒนาตนเอง</div></div>
         <div class="stat"><div class="v">${sumHours(recs).toLocaleString('th-TH')}</div><div class="k">ชั่วโมงพัฒนารวม</div></div>
         <div class="stat"><div class="v" style="color:${none ? 'var(--warn)' : 'var(--good)'}">${none}</div><div class="k">คนที่ยังไม่มีรายการ</div></div>
+        <div class="stat"><div class="v" style="color:${recs.some(r => !r.review) ? 'var(--warn)' : 'var(--good)'}">${recs.filter(r => !r.review).length}</div><div class="k">รายการรอตรวจ</div></div>
       </div>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
         ${projs.length || pc.OTHER ? `<div class="table-wrap"><table><thead><tr><th>โครงการ</th><th class="r">ผู้เข้าร่วม (คน)</th><th class="r">รายการ</th></tr></thead><tbody>
@@ -571,7 +602,7 @@
         ${FB && s.hasAccount ? (s.loginEmail ? `<span class="chip">อีเมลรีเซ็ตรหัส: ${esc(s.loginEmail)}</span>` : '<span class="chip warn">บัญชีไม่มีอีเมล รีเซ็ตรหัสทางอีเมลไม่ได้</span>') : ''}${s.role === 'admin' ? '<span class="chip ink">ผู้บริหาร</span>' : ''}</div>
         ${profileHTML(s)}
         <section class="panel"><h3>ประวัติการพัฒนาตนเอง (${recs.length} รายการ · ${sumHours(recs)} ชั่วโมง)</h3>
-        ${recs.length ? years.map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${recs.filter(r => r.year === y).map(r => recCard(r)).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`,
+        ${recs.length ? years.map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${recs.filter(r => r.year === y).map(r => recCard(r, { who: fullName(s), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`,
       foot: `<button class="btn danger" id="sd-del">ลบบุคลากร</button><button class="btn" id="sd-reset">${FB ? 'ส่งลิงก์รีเซ็ตรหัสผ่าน' : 'รีเซ็ตรหัสผ่าน'}</button>${FB ? '<button class="btn" id="sd-recreate">สร้างบัญชีใหม่</button>' : ''}<button class="btn" id="sd-pdf">ดาวน์โหลด PDF</button><button class="btn primary" id="sd-edit">แก้ไขข้อมูล</button>`
     });
     bindRecList(m.el, recs, () => { m.close(); staffDetail(s, reload); reload && reload(); });
@@ -626,6 +657,7 @@
         <label class="field"><span>โครงการ</span><select id="rc-proj"></select></label>
         <label class="field"><span>บุคลากร</span><select id="rc-staff"><option value="">ทุกคน</option>${staff.map(s => `<option value="${esc(s.id)}">${esc(fullName(s))}</option>`).join('')}</select></label>
         <label class="field"><span>ประเภท</span><select id="rc-type"><option value="">ทุกประเภท</option>${DEV_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
+        <label class="field"><span>สถานะการตรวจ</span><select id="rc-rv"><option value="all">ทุกสถานะ</option><option value="">รอตรวจ</option><option value="approved">ตรวจแล้ว</option><option value="revise">ส่งกลับแก้ไข</option></select></label>
       </div><div id="rc-body" class="stack"></div>`;
     const name = id => { const s = staff.find(x => x.id === id); return s ? fullName(s) : id; };
     const fillProj = () => {
@@ -634,15 +666,15 @@
     };
     let all = [];
     const load = async () => { try { all = await busy(() => api('listRecords', { year: $('#rc-fy').value })); } catch (e) { all = []; } if (v.isConnected) draw(); };
-    const filtered = () => all.filter(r => (!$('#rc-proj').value || r.projectId === $('#rc-proj').value) && (!$('#rc-staff').value || r.staffId === $('#rc-staff').value) && (!$('#rc-type').value || r.type === $('#rc-type').value));
+    const filtered = () => all.filter(r => (!$('#rc-proj').value || r.projectId === $('#rc-proj').value) && (!$('#rc-staff').value || r.staffId === $('#rc-staff').value) && (!$('#rc-type').value || r.type === $('#rc-type').value) && ($('#rc-rv').value === 'all' || (r.review || '') === $('#rc-rv').value));
     const draw = () => {
       const list = filtered();
-      $('#rc-count').textContent = `${list.length} รายการ · ${sumHours(list)} ชั่วโมง`;
-      $('#rc-body').innerHTML = list.length ? `<div class="recs">${list.map(r => recCard(r, { who: name(r.staffId) })).join('')}</div>` : `<div class="empty-state">ไม่พบรายการตามเงื่อนไขที่เลือก</div>`;
+      $('#rc-count').textContent = `${list.length} รายการ · ${sumHours(list)} ชั่วโมง · รอตรวจ ${list.filter(r => !r.review).length} รายการ`;
+      $('#rc-body').innerHTML = list.length ? `<div class="recs">${list.map(r => recCard(r, { who: name(r.staffId), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>` : `<div class="empty-state">ไม่พบรายการตามเงื่อนไขที่เลือก</div>`;
       bindRecList($('#rc-body'), list, load);
     };
     $('#rc-fy').onchange = () => { fillProj(); load(); };
-    ['#rc-proj', '#rc-staff', '#rc-type'].forEach(s => $(s).onchange = draw);
+    ['#rc-proj', '#rc-staff', '#rc-type', '#rc-rv'].forEach(s => $(s).onchange = draw);
     $('#rc-pdf').onclick = () => {
       const sel = id => { const o = $(id).selectedOptions[0]; return o && o.value ? o.textContent : ''; };
       const sub = [sel('#rc-fy') || 'ทุกปีงบประมาณ', sel('#rc-proj'), sel('#rc-staff'), sel('#rc-type')].filter(Boolean).join(' · ');
@@ -712,7 +744,8 @@
     return `<div class="rec"><div class="t">${n}. ${esc(r.title)}</div>
       <div class="m">${who ? `<b>${esc(who)}</b> · ` : ''}${esc(r.type || '')} · ${esc(thRange(r.startDate, r.endDate))}${r.hours ? ` · ${esc(r.hours)} ชั่วโมง` : ''}</div>
       <table class="kv"><tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>
-      <tr><td>สถานที่</td><td>${esc(r.place || '-')}</td></tr><tr><td>หน่วยงานผู้จัด</td><td>${esc(r.organizer || '-')}</td></tr></table>
+      <tr><td>สถานที่</td><td>${esc(r.place || '-')}</td></tr><tr><td>หน่วยงานผู้จัด</td><td>${esc(r.organizer || '-')}</td></tr>
+      <tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>
       <div class="k">ความรู้ที่ได้รับ / การนำไปใช้</div><p>${esc(r.knowledge || '-')}</p><div class="ph">${ph}</div></div>`;
   }
 
@@ -929,18 +962,27 @@
           case 'saveRecord': {
             const d = q.record; let r = d.id ? db.records.find(x => x.id === d.id) : null;
             if (d.id && !r) return err('ไม่พบรายการ');
-            if (r && !isAdmin && r.staffId !== ses.id) return err('ไม่มีสิทธิ์');
+            if (r && r.staffId !== ses.id) return err('แก้ไขได้เฉพาะรายการของตนเอง');
             if (!r) { if (ses.id === 'ADMIN') return err('บัญชีผู้ดูแลไม่สามารถบันทึกรายการของตนเองได้'); r = { id: 'R' + Date.now(), staffId: ses.id }; db.records.push(r); }
+            Object.assign(r, { review: '', reviewNote: '', reviewBy: '', reviewAt: '' });
             ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'startDate', 'endDate', 'hours', 'knowledge'].forEach(k => r[k] = d[k] || '');
             const p = db.projects.find(x => x.id === d.projectId); r.projectName = p ? p.name : 'อื่น ๆ (นอกโครงการ)';
             (q.photos || []).forEach((ph, i) => { if (ph === 'keep') return; r['photo' + (i + 1)] = ph && ph.data ? ph.data : ''; });
             save(); return ok(r);
           }
-          case 'deleteRecord': { const r = db.records.find(x => x.id === q.id); if (!r || (!isAdmin && r.staffId !== ses.id)) return err('ไม่มีสิทธิ์'); db.records = db.records.filter(x => x !== r); save(); return ok(true); }
+          case 'deleteRecord': { const r = db.records.find(x => x.id === q.id); if (!r || r.staffId !== ses.id) return err('ลบได้เฉพาะรายการของตนเอง'); db.records = db.records.filter(x => x !== r); save(); return ok(true); }
         }
         if (!isAdmin) return err('สำหรับผู้บริหาร/ผู้ดูแลระบบเท่านั้น');
         switch (q.action) {
           case 'listStaff': return ok(db.staff.map(pub));
+          case 'reviewRecord': {
+            const r = db.records.find(x => x.id === q.id); if (!r) return err('ไม่พบรายการ');
+            if (r.staffId === ses.id) return err('ตรวจรายการของตนเองไม่ได้');
+            if (q.status === 'revise' && !String(q.note || '').trim()) return err('กรุณาเขียนสิ่งที่ต้องแก้ไข');
+            const st = staff(ses.id); const by = st ? fullName(st) : (ses.name || 'ผู้ดูแลระบบ (ทดลอง)');
+            Object.assign(r, q.status ? { review: q.status, reviewNote: String(q.note || '').trim(), reviewBy: by, reviewAt: new Date().toISOString().slice(0, 19) } : { review: '', reviewNote: '', reviewBy: '', reviewAt: '' });
+            save(); return ok(r);
+          }
           case 'createAccounts': return ok({ created: 0, pending: 0, warnings: [] });
           case 'listAdmins': return ok([{ uid: 'ADMIN', name: 'ผู้ดูแลระบบ (บัญชีแรก)', username: db.admin.user, email: '', self: ses.id === 'ADMIN' }].concat((db.admins || []).map(a => ({ uid: a.uid, name: a.name, username: a.username, email: a.email, self: false }))));
           case 'addAdmin': {
