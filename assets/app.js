@@ -731,19 +731,20 @@
     return { set: t => { const m = $('.pdf-busy-msg', el); if (m) m.textContent = t; }, close: () => el.remove() };
   }
 
-  // แบ่งตารางยาวเป็นหลายตาราง (มีหัวตารางทุกส่วน) เพื่อไม่ให้แถวถูกตัดกลางหน้า
-  function splitTables(root, maxH) {
-    [...root.children].filter(e => e.tagName === 'TABLE' && e.tBodies[0]).forEach(t => {
-      if (t.getBoundingClientRect().height <= maxH * 0.92) return;
-      const rows = [...t.tBodies[0].rows];
-      const mk = () => { const nt = t.cloneNode(false); if (t.tHead) nt.appendChild(t.tHead.cloneNode(true)); nt.appendChild(document.createElement('tbody')); t.parentNode.insertBefore(nt, t); return nt; };
-      let cur = mk();
-      rows.forEach(r => {
-        cur.tBodies[0].appendChild(r);
-        if (cur.getBoundingClientRect().height > maxH * 0.92 && cur.tBodies[0].rows.length > 1) { r.remove(); cur = mk(); cur.tBodies[0].appendChild(r); }
-      });
-      t.remove();
-    });
+  // ตัดตารางให้พอดีพื้นที่ที่เหลือในหน้า: แถวที่ไม่พอย้ายไปตารางใหม่ (มีหัวตารางซ้ำ) ต่อหน้าถัดไป
+  function splitTableToFit(t, room) {
+    const tb = t.tBodies[0];
+    if (!tb || tb.rows.length < 2) return null;
+    const rest = t.cloneNode(false);
+    if (t.tHead) rest.appendChild(t.tHead.cloneNode(true));
+    const rb = document.createElement('tbody'); rest.appendChild(rb);
+    t.after(rest);
+    while (t.getBoundingClientRect().height > room && tb.rows.length > 1) rb.insertBefore(tb.rows[tb.rows.length - 1], rb.firstChild);
+    if (t.getBoundingClientRect().height > room || !rb.rows.length) {
+      while (rb.rows.length) tb.appendChild(rb.rows[0]);
+      rest.remove(); return null;
+    }
+    return rest;
   }
 
   const safeName = s => String(s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, '_').slice(0, 80);
@@ -762,7 +763,6 @@
       root.style.cssText = `position:absolute;left:0;top:0;width:${CW}px;z-index:-1;`;
       root.innerHTML = `<style>${PDF_CSS}</style><header><div class="org">${esc(CFG.ORG_NAME)}</div><h1>${esc(title)}</h1>${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}</header>${build()}<footer>พิมพ์จาก${esc(CFG.APP_TITLE)} เมื่อวันที่ ${thToday()}</footer>`;
       document.body.appendChild(root);
-      splitTables(root, CH);
       const blocks = [...root.children].filter(e => e.tagName !== 'STYLE');
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4', compress: true });
@@ -770,12 +770,21 @@
       let y = 0, prevBottom = null;
       for (let i = 0; i < blocks.length; i++) {
         ov.set(`กำลังสร้างไฟล์ PDF… ${Math.round((i / blocks.length) * 100)}%`);
-        const el = blocks[i], r = el.getBoundingClientRect();
+        const el = blocks[i];
+        let r = el.getBoundingClientRect();
         const gap = prevBottom == null ? 0 : Math.max(0, r.top - prevBottom);
-        prevBottom = r.bottom;
+        const fitTable = room => {
+          if (el.tagName === 'TABLE' && r.height > room) {
+            const rest = splitTableToFit(el, room);
+            if (rest) { blocks.splice(i + 1, 0, rest); r = el.getBoundingClientRect(); }
+          }
+        };
+        if (y > 0) fitTable(CH - y - gap);
         let need = r.height;
-        if (el.tagName === 'H2' && blocks[i + 1]) need += Math.min(blocks[i + 1].getBoundingClientRect().height, CH * 0.35);
-        if (y > 0 && y + gap + Math.min(need, CH) > CH) { pdf.addPage(); y = 0; } else if (y > 0) y += gap;
+        if (el.tagName === 'H2' && blocks[i + 1]) need += Math.min(blocks[i + 1].tagName === 'TABLE' ? 90 : blocks[i + 1].getBoundingClientRect().height, CH * 0.35);
+        if (y > 0 && y + gap + Math.min(need, CH) > CH) { pdf.addPage(); y = 0; fitTable(CH); } else if (y > 0) y += gap;
+        else fitTable(CH);
+        prevBottom = r.bottom;
         const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true });
         const ratio = canvas.width / r.width;
         let done = 0;
