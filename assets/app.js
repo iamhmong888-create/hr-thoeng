@@ -23,6 +23,46 @@
   const TH_M = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
   const TH_MS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   const DEV_TYPES = ['ศึกษาดูงาน', 'อบรม', 'ประชุม/สัมมนา', 'อบรมออนไลน์', 'พัฒนาตนเองอื่น ๆ'];
+  const AWARD_LEVELS = ['ระดับอำเภอ', 'ระดับจังหวัด', 'ระดับภาค', 'ระดับประเทศ', 'ระดับนานาชาติ'];
+  // รายการ 3 ประเภท ใช้หน้าจอ/ฟอร์ม/รายงานชุดเดียวกัน ต่างกันที่ชื่อช่องและเมนู
+  const KIND = {
+    dev: {
+      tab: 'dev', adminTab: 'records', menu: 'การพัฒนาตนเอง', mine: 'การพัฒนาตนเองของฉัน', adminMenu: 'รายการพัฒนาตนเอง', name: 'รายการพัฒนาตนเอง',
+      head: 'การพัฒนาตนเอง', desc: 'ศึกษาดูงาน อบรม ประชุมสัมมนา และการพัฒนาตนเองตามโครงการพัฒนาบุคลากร', add: '+ เพิ่มรายการพัฒนาตนเอง', addTitle: 'เพิ่มรายการพัฒนาตนเอง', editTitle: 'แก้ไขรายการพัฒนาตนเอง',
+      adminHead: 'รายการพัฒนาตนเองของบุคลากร', types: DEV_TYPES, typeLabel: 'ประเภทการพัฒนา', typeFallback: 'พัฒนาตนเอง',
+      titleLabel: 'ชื่อเรื่อง / หลักสูตร / กิจกรรม', titlePh: 'เช่น ศึกษาดูงานแหล่งเรียนรู้เศรษฐกิจพอเพียง', placeLabel: 'สถานที่', orgLabel: 'หน่วยงานผู้จัด', orgShort: 'จัดโดย',
+      detailLabel: 'ความรู้ที่ได้รับ / การนำไปใช้', detailShort: 'ความรู้ที่ได้รับ', detailPh: 'สรุปความรู้ ทักษะ หรือแนวคิดที่ได้รับ และการนำไปประยุกต์ใช้ในการปฏิบัติงาน', detailReq: true,
+      project: true, hours: true, range: true, dateLabel: 'วันที่เริ่ม (วัน เดือน พ.ศ.)',
+      empty: 'กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง',
+      report: 'รายงานการพัฒนาตนเอง', reportAll: 'รายงานการพัฒนาตนเองของบุคลากร', file: 'การพัฒนาตนเอง'
+    },
+    award: {
+      tab: 'award', adminTab: 'awards', menu: 'โล่/รางวัล', mine: 'โล่/รางวัลของฉัน', adminMenu: 'โล่/รางวัล', name: 'รายการโล่/รางวัล',
+      head: 'โล่/รางวัล', desc: 'โล่ ถ้วย เกียรติบัตร และรางวัลที่ได้รับจากการปฏิบัติงาน', add: '+ เพิ่มรางวัล', addTitle: 'เพิ่มรายการโล่/รางวัล', editTitle: 'แก้ไขรายการโล่/รางวัล',
+      adminHead: 'โล่/รางวัลของบุคลากร', types: ['โล่รางวัล', 'ถ้วยรางวัล', 'เกียรติบัตร', 'เหรียญรางวัล', 'รางวัลอื่น ๆ'], typeLabel: 'ประเภทรางวัล', typeFallback: 'รางวัล',
+      titleLabel: 'ชื่อรางวัล / ผลงานที่ได้รับรางวัล', titlePh: 'เช่น ครูดีเด่น ระดับจังหวัด ประจำปี 2570', placeLabel: 'สถานที่รับรางวัล', orgLabel: 'หน่วยงานที่มอบรางวัล', orgShort: 'มอบโดย',
+      detailLabel: 'รายละเอียดผลงาน / ความสำคัญของรางวัล', detailShort: 'รายละเอียด', detailPh: 'ผลงานที่ได้รับรางวัล เกณฑ์การคัดเลือก หรือประโยชน์ที่เกิดกับหน่วยงาน', detailReq: false,
+      level: true, dateLabel: 'วันที่ได้รับรางวัล (วัน เดือน พ.ศ.)',
+      empty: 'กด “เพิ่มรางวัล” เพื่อบันทึกโล่ ถ้วย เกียรติบัตร หรือรางวัลที่ได้รับ',
+      report: 'รายงานโล่/รางวัล', reportAll: 'รายงานโล่/รางวัลของบุคลากร', file: 'โล่รางวัล'
+    },
+    speaker: {
+      tab: 'speaker', adminTab: 'speakers', menu: 'เป็นวิทยากร', mine: 'การเป็นวิทยากรของฉัน', adminMenu: 'เป็นวิทยากร', name: 'รายการวิทยากร',
+      head: 'การเป็นวิทยากร', desc: 'การได้รับเชิญเป็นวิทยากร บรรยาย อบรม หรือเป็นคณะกรรมการ', add: '+ เพิ่มงานวิทยากร', addTitle: 'เพิ่มรายการวิทยากร', editTitle: 'แก้ไขรายการวิทยากร',
+      adminHead: 'การเป็นวิทยากรของบุคลากร', types: ['บรรยาย', 'วิทยากรอบรม/สาธิต', 'วิทยากรกระบวนการ', 'คณะกรรมการตัดสิน/ประเมิน', 'วิทยากรอื่น ๆ'], typeLabel: 'ลักษณะงาน', typeFallback: 'วิทยากร',
+      titleLabel: 'หัวข้อ / เรื่องที่เป็นวิทยากร', titlePh: 'เช่น การทำบัญชีครัวเรือน', placeLabel: 'สถานที่', orgLabel: 'หน่วยงานที่เชิญ', orgShort: 'เชิญโดย',
+      detailLabel: 'รายละเอียด / ผลที่เกิดขึ้น', detailShort: 'รายละเอียด', detailPh: 'เนื้อหาที่ถ่ายทอด กิจกรรม และผลที่เกิดกับผู้เข้าร่วม', detailReq: false,
+      audience: true, hours: true, range: true, dateLabel: 'วันที่ (วัน เดือน พ.ศ.)',
+      empty: 'กด “เพิ่มงานวิทยากร” เพื่อบันทึกการเป็นวิทยากรหรือคณะกรรมการ',
+      report: 'รายงานการเป็นวิทยากร', reportAll: 'รายงานการเป็นวิทยากรของบุคลากร', file: 'การเป็นวิทยากร'
+    }
+  };
+  const KINDS = ['dev', 'award', 'speaker'];
+  const kindOf = r => KIND[r && r.kind] ? r.kind : 'dev';
+  const ofKind = (list, k) => list.filter(r => kindOf(r) === k);
+  const noPending = () => ({ dev: 0, award: 0, speaker: 0 });
+  const countPending = (list, myId) => { const n = noPending(); list.forEach(r => { if (!r.review && r.staffId !== myId) n[kindOf(r)]++; }); return n; };
+  const sumPending = n => KINDS.reduce((a, k) => a + (n[k] || 0), 0);
   const store = {
     get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch (e) { } }
@@ -209,7 +249,7 @@
     S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
     S.tab = store.get('hr_tab_' + S.role) || (S.role === 'admin' ? 'overview' : 'profile');
-    S.pending = 0;
+    S.pending = noPending();
     render();
     startPendingWatch();
   }
@@ -238,9 +278,10 @@
     if (!be.watchPending) return refreshPending();
     let first = true;
     stopWatch = be.watchPending(n => {
+      if (typeof n === 'number') n = Object.assign(noPending(), { dev: n });
       const prev = S.pending;
       S.pending = n; paintBadge();
-      if (!first && n > prev) toast(`มีรายการใหม่รอตรวจ (รวม ${n} รายการ)`);
+      if (!first) notifyNew(prev, n);
       if (!first) scheduleLiveRefresh();
       first = false;
     }, ok => { liveOk = ok; });
@@ -252,18 +293,22 @@
     if (S.role !== 'admin') return;
     try {
       const all = await api('listRecords', {});
-      const n = all.filter(r => !r.review && r.staffId !== S.user.id).length;
-      if (n > S.pending) toast(`มีรายการใหม่รอตรวจ (รวม ${n} รายการ)`);
+      const n = countPending(all, S.user.id);
+      notifyNew(S.pending, n);
       S.pending = n; paintBadge();
     } catch (e) { return; }
     scheduleLiveRefresh();
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.user) liveCatchUp(); });
+  function notifyNew(prev, n) {
+    const up = KINDS.filter(k => (n[k] || 0) > ((prev || {})[k] || 0));
+    if (up.length) toast(`มีรายการใหม่รอตรวจ: ${up.map(k => `${KIND[k].adminMenu} ${n[k]} รายการ`).join(' · ')}`);
+  }
   // ถ้าเปิดหน้า "รายการพัฒนาตนเอง" อยู่ ให้รายการในหน้าอัปเดตเองเมื่อข้อมูลเปลี่ยน
   let liveT = null;
   function scheduleLiveRefresh() {
     clearTimeout(liveT);
-    liveT = setTimeout(() => { if (S.tab === 'records' && typeof S.recLive === 'function') S.recLive(); }, 400);
+    liveT = setTimeout(() => { if (KINDS.some(k => KIND[k].adminTab === S.tab) && typeof S.recLive === 'function') S.recLive(); }, 400);
   }
 
   /* ตัวเลขแจ้งเตือนบนเมนู "รายการพัฒนาตนเอง": จำนวนรายการที่รอผู้บริหารตรวจ (ทุกปีงบประมาณ ไม่นับรายการของตนเอง) */
@@ -271,18 +316,21 @@
     if (S.role !== 'admin' || stopWatch) return; // ถ้าติดตามแบบเรียลไทม์อยู่แล้ว ไม่ต้องโหลดซ้ำ
     try {
       const all = await api('listRecords', {});
-      S.pending = all.filter(r => !r.review && r.staffId !== S.user.id).length;
+      S.pending = countPending(all, S.user.id);
     } catch (e) { return; }
     paintBadge();
   }
   function paintBadge() {
-    const t = $('.tab[data-tab=records]'); if (!t) return;
-    let b = $('.tab-badge', t);
-    if (!S.pending) { if (b) b.remove(); t.removeAttribute('title'); return; }
-    if (!b) { b = document.createElement('span'); b.className = 'tab-badge'; t.appendChild(b); }
-    b.textContent = S.pending > 99 ? '99+' : String(S.pending);
-    t.title = `รอตรวจ ${S.pending} รายการ`;
-    b.setAttribute('aria-label', `รอตรวจ ${S.pending} รายการ`);
+    KINDS.forEach(k => {
+      const t = $(`.tab[data-tab=${KIND[k].adminTab}]`); if (!t) return;
+      const n = (S.pending || {})[k] || 0;
+      let b = $('.tab-badge', t);
+      if (!n) { if (b) b.remove(); t.removeAttribute('title'); return; }
+      if (!b) { b = document.createElement('span'); b.className = 'tab-badge'; t.appendChild(b); }
+      b.textContent = n > 99 ? '99+' : String(n);
+      t.title = `รอตรวจ ${n} รายการ`;
+      b.setAttribute('aria-label', `รอตรวจ ${n} รายการ`);
+    });
   }
 
   async function logout(silent) {
@@ -295,14 +343,17 @@
 
   /* ---------------- shell ---------------- */
   const TABS = {
-    teacher: [['profile', 'ประวัติส่วนตัว'], ['dev', 'การพัฒนาตนเอง'], ['password', 'เปลี่ยนรหัสผ่าน']],
-    admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ['records', 'รายการพัฒนาตนเอง'], ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
+    teacher: [['profile', 'ประวัติส่วนตัว'], ...KINDS.map(k => [KIND[k].tab, KIND[k].menu]), ['password', 'เปลี่ยนรหัสผ่าน']],
+    admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ...KINDS.map(k => [KIND[k].adminTab, KIND[k].adminMenu]), ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
   };
   function demoBar() { return `<div class="demo-bar">โหมดทดลอง: ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ใส่ค่า FIREBASE ใน config.js เพื่อใช้งานจริง</div>`; }
 
+  // เมนูหลายแถวบนจอเล็ก (ผู้บริหารมีเมนูมาก): ถ้าแถบเมนูสูงเกินไป ไม่ตรึงไว้ด้านบน เพื่อไม่ให้บังเนื้อหา
+  function fitAppbar() { const ab = $('.appbar'); if (ab) ab.classList.toggle('tall', ab.offsetHeight > window.innerHeight * 0.36); }
+  window.addEventListener('resize', () => fitAppbar());
   function render() {
     let tabs = TABS[S.role];
-    if (S.role === 'admin' && !S.user.isAdminAccount) tabs = tabs.slice(0, 4).concat([['profile', 'ประวัติส่วนตัวของฉัน'], ['dev', 'การพัฒนาตนเองของฉัน'], ['password', 'เปลี่ยนรหัสผ่าน']]);
+    if (S.role === 'admin' && !S.user.isAdminAccount) tabs = tabs.slice(0, 2 + KINDS.length + 1).concat([['profile', 'ประวัติส่วนตัวของฉัน'], ...KINDS.map(k => [KIND[k].tab, KIND[k].mine]), ['password', 'เปลี่ยนรหัสผ่าน']]);
     if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
     document.title = `${CFG.APP_TITLE} | ${CFG.ORG_NAME}`;
     app.innerHTML = `${DEMO ? demoBar() : ''}
@@ -313,10 +364,12 @@
     <nav class="tabs" aria-label="เมนู"><div class="tabs-in">${tabs.map(([k, l]) => `<button class="tab ${k === S.tab ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div></nav></div>
     <main id="view"></main>`;
     $('#btn-logout').onclick = () => logout();
+    fitAppbar();
     paintBadge();
     $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; store.set('hr_tab_' + S.role, S.tab); render(); });
     const v = $('#view');
-    const views = { profile: viewProfile, dev: viewDev, password: viewPassword, overview: viewOverview, staff: viewStaff, records: viewRecords, settings: viewSettings };
+    const views = { profile: viewProfile, password: viewPassword, overview: viewOverview, staff: viewStaff, settings: viewSettings };
+    KINDS.forEach(k => { views[KIND[k].tab] = el => viewKind(el, k); views[KIND[k].adminTab] = el => viewRecords(el, k); });
     (views[S.tab] || viewProfile)(v);
   }
 
@@ -429,16 +482,23 @@
   // mode: 'own' = เจ้าของ (แก้ไข/ลบ) · 'review' = ผู้บริหารตรวจ · 'view' = ดูอย่างเดียว
   function recCard(r, opts = {}) {
     const mode = opts.mode || 'own';
-    const ph = ['photo1', 'photo2'].map((k, i) => r[k] ? `<img class="thumb" loading="lazy" src="${esc(photoUrl(r[k]) || BLANK)}" data-full="${esc(photoUrl(r[k]))}" ${/^fs:/.test(r[k]) ? `data-fs="${esc(r[k])}"` : ''} alt="รูปหลักฐาน ${i + 1}: ${esc(r.title)}">` : `<div class="thumb none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
+    const k = kindOf(r), K = KIND[k];
+    const ph = ['photo1', 'photo2'].map((f, i) => r[f] ? `<img class="thumb" loading="lazy" src="${esc(photoUrl(r[f]) || BLANK)}" data-full="${esc(photoUrl(r[f]))}" ${/^fs:/.test(r[f]) ? `data-fs="${esc(r[f])}"` : ''} alt="รูปหลักฐาน ${i + 1}: ${esc(r.title)}">` : `<div class="thumb none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
     const long = (r.knowledge || '').length > 260;
+    const info = [
+      K.project ? `<span><b class="lbl">โครงการ:</b> ${esc(r.projectName || '—')}</span>` : '',
+      r.organizer ? `<span><b class="lbl">${K.orgShort}:</b> ${esc(r.organizer)}</span>` : '',
+      r.place ? `<span><b class="lbl">${K.placeLabel}:</b> ${esc(r.place)}</span>` : '',
+      K.audience && r.audience ? `<span><b class="lbl">ผู้เข้าร่วม:</b> ${esc(r.audience)}</span>` : ''
+    ].join('');
     return `<article class="rec st-${esc(r.review || 'pending')}${opts.isNew ? ' rec-new' : ''}" data-id="${esc(r.id)}" data-who="${esc(opts.who || '')}">
       <div class="body">
-        <div class="meta">${opts.isNew ? '<span class="chip new">ใหม่</span>' : ''}${reviewChip(r)}<span class="chip ink">${esc(r.type || 'พัฒนาตนเอง')}</span><span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
+        <div class="meta">${opts.isNew ? '<span class="chip new">ใหม่</span>' : ''}${reviewChip(r)}<span class="chip ink">${esc(r.type || K.typeFallback)}</span>${K.level && r.level ? `<span class="chip accent">${esc(r.level)}</span>` : ''}<span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${K.hours && r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
         <h3>${esc(r.title)}</h3>
         ${opts.who ? `<div class="small"><b>${esc(opts.who)}</b></div>` : ''}
-        <div class="meta"><span><b class="lbl">โครงการ:</b> ${esc(r.projectName || '—')}</span>${r.place ? `<span><b class="lbl">สถานที่:</b> ${esc(r.place)}</span>` : ''}${r.organizer ? `<span><b class="lbl">จัดโดย:</b> ${esc(r.organizer)}</span>` : ''}</div>
-        <div class="small" style="margin-top:.2rem"><b class="lbl">ความรู้ที่ได้รับ</b></div>
-        <div class="know ${long ? 'clamp' : ''}">${esc(r.knowledge || '—')}</div>
+        ${info ? `<div class="meta">${info}</div>` : ''}
+        ${K.detailReq || r.knowledge ? `<div class="small" style="margin-top:.2rem"><b class="lbl">${K.detailShort}</b></div>
+        <div class="know ${long ? 'clamp' : ''}">${esc(r.knowledge || '—')}</div>` : ''}
         ${long ? `<button class="btn ghost sm no-print" data-more style="align-self:flex-start">อ่านทั้งหมด</button>` : ''}
         ${reviewBox(r)}
       </div>
@@ -450,9 +510,9 @@
 
   function reviewForm(r, who, reload) {
     const m = modal({
-      title: 'ตรวจรายการพัฒนาตนเอง', size: 'sm',
+      title: 'ตรวจ' + KIND[kindOf(r)].name, size: 'sm',
       body: `<div><b>${esc(who || '')}</b><div>${esc(r.title)}</div><div class="small muted">${esc(thRange(r.startDate, r.endDate))} · สถานะปัจจุบัน ${reviewChip(r)}</div></div>
-        <label class="field"><span>ความเห็น / สิ่งที่ต้องแก้ไข (จำเป็นเมื่อส่งกลับแก้ไข)</span><textarea id="rv-note" rows="4" placeholder="เช่น กรุณาเพิ่มรายละเอียดการนำความรู้ไปใช้ หรือแนบรูปให้ครบ 2 รูป">${esc(r.reviewNote || '')}</textarea></label>`,
+        <label class="field"><span>ความเห็น / สิ่งที่ต้องแก้ไข (จำเป็นเมื่อส่งกลับแก้ไข)</span><textarea id="rv-note" rows="4" placeholder="เช่น กรุณาเพิ่มรายละเอียด หรือแนบรูปให้ครบ 2 รูป">${esc(r.reviewNote || '')}</textarea></label>`,
       foot: `${r.review ? '<button class="btn ghost" id="rv-clear">ยกเลิกผลตรวจ</button>' : ''}<button class="btn danger" id="rv-revise">ส่งกลับให้แก้ไข</button><button class="btn primary" id="rv-ok">ตรวจแล้ว</button>`
     });
     const send = async status => {
@@ -505,7 +565,7 @@
     $$('.rec', root).forEach(el => {
       const r = list.find(x => x.id === el.dataset.id);
       const more = $('[data-more]', el); if (more) more.onclick = () => { $('.know', el).classList.toggle('clamp'); more.textContent = $('.know', el).classList.contains('clamp') ? 'อ่านทั้งหมด' : 'ย่อ'; };
-      const ed = $('[data-edit]', el); if (ed) ed.onclick = async () => { try { await busy(() => loadPhotos([r])); } catch (e) { } recordForm(r, reload); };
+      const ed = $('[data-edit]', el); if (ed) ed.onclick = async () => { try { await busy(() => loadPhotos([r])); } catch (e) { } recordForm(r, reload, kindOf(r)); };
       const rv = $('[data-review]', el); if (rv) rv.onclick = () => reviewForm(r, el.dataset.who, reload);
       const dl = $('[data-del]', el); if (dl) dl.onclick = async () => {
         if (!(await confirmBox(`ลบรายการ “${r.title}” และรูปหลักฐานทั้งหมด?`, 'ลบรายการ'))) return;
@@ -514,44 +574,55 @@
     });
   }
 
-  async function viewDev(v) {
-    v.innerHTML = `<div class="page-head"><div class="grow"><h1>การพัฒนาตนเอง</h1><div class="muted small">ศึกษาดูงาน อบรม ประชุมสัมมนา และการพัฒนาตนเองตามโครงการพัฒนาบุคลากร</div></div>
+  // หน้าของครู: การพัฒนาตนเอง / รายงานโล่/รางวัล / รายการวิทยากร
+  async function viewKind(v, kind) {
+    const K = KIND[kind];
+    v.innerHTML = `<div class="page-head"><div class="grow"><h1>${K.head}</h1><div class="muted small">${K.desc}</div></div>
       <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('dev-fy', S.fy)}</label></div></div>
-      <div class="print-only"><h2>${esc(fullName(S.user))}</h2></div>
-      <div id="dev-body" class="stack"><div class="empty-state">กำลังโหลด…</div></div>`;
-    $('#dev-fy').onchange = e => { S.fy = e.target.value; S.devProj = ''; loadDev(); };
-    loadDev();
+      <div id="dev-body" class="stack" data-kind="${kind}"><div class="empty-state">กำลังโหลด…</div></div>`;
+    $('#dev-fy').onchange = e => { S.fy = e.target.value; S.devProj = ''; loadKind(kind); };
+    loadKind(kind);
   }
 
-  async function loadDev() {
-    const box = $('#dev-body'); if (!box) return;
+  function kindStats(kind, list) {
+    const st = (v, k, extra = '') => `<div class="stat"><div class="v">${v}${extra}</div><div class="k">${k}</div></div>`;
+    if (kind === 'award') {
+      const lv = l => list.filter(r => r.level === l).length;
+      return st(list.length, 'รางวัลทั้งหมด') + st(lv('ระดับอำเภอ'), 'ระดับอำเภอ') + st(lv('ระดับจังหวัด'), 'ระดับจังหวัด') + st(lv('ระดับภาค') + lv('ระดับประเทศ') + lv('ระดับนานาชาติ'), 'ระดับภาคขึ้นไป');
+    }
+    if (kind === 'speaker') {
+      return st(list.length, 'ครั้งที่เป็นวิทยากร') + st(sumHours(list).toLocaleString('th-TH'), 'ชั่วโมงรวม') + st(new Set(list.map(r => r.organizer).filter(Boolean)).size, 'หน่วยงานที่เชิญ');
+    }
+    const projs = S.meta.projects.filter(p => p.year === S.fy);
+    return st(list.length, 'รายการทั้งหมด') + st(sumHours(list).toLocaleString('th-TH'), 'ชั่วโมงพัฒนารวม') + st(list.filter(r => r.type === 'ศึกษาดูงาน').length, 'ศึกษาดูงาน')
+      + st(new Set(list.map(r => r.projectId).filter(id => id && id !== 'OTHER')).size, 'โครงการที่เข้าร่วม', `<span class="small muted"> / ${projs.length}</span>`);
+  }
+
+  async function loadKind(kind) {
+    const box = $('#dev-body'); if (!box || box.dataset.kind !== kind) return;
+    const K = KIND[kind], reload = () => loadKind(kind);
     if (!S.meta.years.length) { box.innerHTML = `<div class="empty-state">ยังไม่มีปีงบประมาณในระบบ กรุณาแจ้งผู้ดูแลระบบให้เพิ่มปีงบประมาณ</div>`; return; }
     let list;
-    try { list = await busy(() => api('listRecords', { year: S.fy, mine: true })); } catch (e) { return; }
+    try { list = ofKind(await busy(() => api('listRecords', { year: S.fy, mine: true })), kind); } catch (e) { return; }
     if (!box.isConnected) return;
     const projs = S.meta.projects.filter(p => p.year === S.fy);
     const projName = id => id === 'OTHER' ? 'อื่น ๆ (นอกโครงการ)' : ((projs.find(p => p.id === id) || {}).name || '');
-    if (S.devProj && !projName(S.devProj)) S.devProj = '';
+    if (!K.project || (S.devProj && !projName(S.devProj))) S.devProj = '';
     const shown = S.devProj ? list.filter(r => r.projectId === S.devProj) : list;
     box.innerHTML = `
-      <div class="stats">
-        <div class="stat"><div class="v">${list.length}</div><div class="k">รายการทั้งหมด</div></div>
-        <div class="stat"><div class="v">${sumHours(list).toLocaleString('th-TH')}</div><div class="k">ชั่วโมงพัฒนารวม</div></div>
-        <div class="stat"><div class="v">${list.filter(r => r.type === 'ศึกษาดูงาน').length}</div><div class="k">ศึกษาดูงาน</div></div>
-        <div class="stat"><div class="v">${new Set(list.map(r => r.projectId).filter(id => id && id !== 'OTHER')).size}<span class="small muted"> / ${projs.length}</span></div><div class="k">โครงการที่เข้าร่วม</div></div>
-      </div>
+      <div class="stats">${kindStats(kind, list)}</div>
       <div class="page-head no-print" style="margin-top:.4rem"><div class="grow"><h2>รายการ ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)}${S.devProj ? ` · แสดง ${shown.length} จาก ${list.length} รายการ` : ''}</div></div>
-        <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">+ เพิ่มรายการพัฒนาตนเอง</button></div></div>
-      <div class="toolbar no-print"><label class="field" style="flex:1 1 320px"><span>แสดงเฉพาะโครงการ</span><select id="dev-proj">
+        <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">${K.add}</button></div></div>
+      ${K.project ? `<div class="toolbar no-print"><label class="field" style="flex:1 1 320px"><span>แสดงเฉพาะโครงการ</span><select id="dev-proj">
         <option value="">ทุกโครงการ (${list.length} รายการ)</option>
         ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map((p, i) => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${p.id === 'OTHER' ? '' : (i + 1) + '. '}${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
-      </select></label></div>
+      </select></label></div>` : ''}
       ${list.some(r => r.review === 'revise') ? `<div class="notice revise-alert"><div class="grow"><b>มี ${list.filter(r => r.review === 'revise').length} รายการที่ผู้บริหารส่งกลับให้แก้ไข</b> อ่านความเห็นในรายการ แล้วกด “แก้ไข” เพื่อปรับปรุง เมื่อบันทึกแล้วสถานะจะกลับเป็น “รอตรวจ”</div></div>` : ''}
-      <div class="recs">${shown.length ? shown.map(r => recCard(r, { mode: 'own' })).join('') : list.length ? '<div class="empty-state">ยังไม่มีรายการในโครงการนี้</div>' : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง</div>`}</div>`;
-    $('#dev-add').onclick = () => recordForm({ year: S.fy }, loadDev);
-    $('#dev-proj').onchange = e => { S.devProj = e.target.value; loadDev(); };
-    $('#dev-pdf').onclick = () => reportPerson(S.user, shown, { year: S.fy, profile: false, project: S.devProj ? projName(S.devProj) : '' });
-    bindRecList(box, shown, loadDev);
+      <div class="recs">${shown.length ? shown.map(r => recCard(r, { mode: 'own' })).join('') : list.length ? '<div class="empty-state">ยังไม่มีรายการในโครงการนี้</div>' : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>${K.empty}</div>`}</div>`;
+    $('#dev-add').onclick = () => recordForm({ year: S.fy, kind }, reload, kind);
+    const dp = $('#dev-proj'); if (dp) dp.onchange = e => { S.devProj = e.target.value; reload(); };
+    $('#dev-pdf').onclick = () => reportPerson(S.user, shown, { year: S.fy, profile: false, kind, project: S.devProj ? projName(S.devProj) : '' });
+    bindRecList(box, shown, reload);
   }
 
   function dateSel(prefix, iso, allowEmpty) {
@@ -572,27 +643,32 @@
     return `${ce}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
 
-  function recordForm(r, reload) {
+  function recordForm(r, reload, kind) {
+    kind = kind || kindOf(r);
+    const K = KIND[kind];
     const isNew = !r.id;
     const today = new Date(); const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const photos = [r.photo1 ? 'keep' : null, r.photo2 ? 'keep' : null];
     const previews = [photoUrl(r.photo1), photoUrl(r.photo2)];
     const projOpts = y => S.meta.projects.filter(p => p.year === y).map((p, i) => `<option value="${esc(p.id)}" ${p.id === r.projectId ? 'selected' : ''}>${i + 1}. ${esc(p.name)}</option>`).join('')
       + `<option value="OTHER" ${r.projectId === 'OTHER' ? 'selected' : ''}>อื่น ๆ (นอกโครงการ / พัฒนาตนเอง)</option>`;
+    const types = K.types.concat(r.type && !K.types.includes(r.type) ? [r.type] : []);
     const m = modal({
-      title: isNew ? 'เพิ่มรายการพัฒนาตนเอง' : 'แก้ไขรายการพัฒนาตนเอง',
+      title: isNew ? K.addTitle : K.editTitle,
       body: `${r.review === 'approved' ? '<div class="notice info"><div class="grow">รายการนี้ผู้บริหารตรวจแล้ว ถ้าบันทึกการแก้ไข สถานะจะกลับเป็น “รอตรวจ”</div></div>' : ''}${r.review === 'revise' ? `<div class="review-note revise"><b>สิ่งที่ต้องแก้ไข</b><div>${esc(r.reviewNote || '')}</div></div>` : ''}
       <div class="grid">
         <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('rf-year', r.year || S.fy)}</label>
-        <label class="field"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>
-        <label class="field"><span>ประเภทการพัฒนา <span class="req">*</span></span><select id="rf-type">${DEV_TYPES.map(t => `<option ${t === r.type ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-        <label class="field"><span>จำนวนชั่วโมง</span><input type="number" id="rf-hours" min="0" step="0.5" value="${esc(r.hours || '')}" placeholder="เช่น 6"></label>
-        <label class="field wide"><span>ชื่อเรื่อง / หลักสูตร / กิจกรรม <span class="req">*</span></span><input type="text" id="rf-title" value="${esc(r.title || '')}" placeholder="เช่น ศึกษาดูงานแหล่งเรียนรู้เศรษฐกิจพอเพียง"></label>
-        <label class="field"><span>สถานที่</span><input type="text" id="rf-place" value="${esc(r.place || '')}"></label>
-        <label class="field"><span>หน่วยงานผู้จัด</span><input type="text" id="rf-org" value="${esc(r.organizer || '')}"></label>
-        <div class="wide dates"><div class="field"><span>วันที่เริ่ม (วัน เดือน พ.ศ.) <span class="req">*</span></span>${dateSel('rf-s', r.startDate || todayISO)}</div>
-        <div class="field"><span>ถึงวันที่ (ถ้ามีหลายวัน)</span>${dateSel('rf-e', r.endDate, true)}</div></div>
-        <label class="field wide"><span>ความรู้ที่ได้รับ / การนำไปใช้ <span class="req">*</span></span><textarea id="rf-know" rows="6" placeholder="สรุปความรู้ ทักษะ หรือแนวคิดที่ได้รับ และการนำไปประยุกต์ใช้ในการปฏิบัติงาน">${esc(r.knowledge || '')}</textarea></label>
+        ${K.project ? `<label class="field"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>` : ''}
+        <label class="field"><span>${K.typeLabel} <span class="req">*</span></span><select id="rf-type">${types.map(t => `<option ${t === r.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+        ${K.level ? `<label class="field"><span>ระดับรางวัล <span class="req">*</span></span><select id="rf-level">${AWARD_LEVELS.map(t => `<option ${t === r.level ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
+        ${K.hours ? `<label class="field"><span>จำนวนชั่วโมง</span><input type="number" id="rf-hours" min="0" step="0.5" value="${esc(r.hours || '')}" placeholder="เช่น 6"></label>` : ''}
+        <label class="field wide"><span>${K.titleLabel} <span class="req">*</span></span><input type="text" id="rf-title" value="${esc(r.title || '')}" placeholder="${esc(K.titlePh)}"></label>
+        <label class="field"><span>${K.orgLabel}</span><input type="text" id="rf-org" value="${esc(r.organizer || '')}"></label>
+        <label class="field"><span>${K.placeLabel}</span><input type="text" id="rf-place" value="${esc(r.place || '')}"></label>
+        ${K.audience ? `<label class="field wide"><span>กลุ่มผู้เข้าร่วม / จำนวน</span><input type="text" id="rf-aud" value="${esc(r.audience || '')}" placeholder="เช่น ผู้เรียน กศน. ตำบลงิม 30 คน"></label>` : ''}
+        <div class="wide dates"><div class="field"><span>${K.dateLabel} <span class="req">*</span></span>${dateSel('rf-s', r.startDate || todayISO)}</div>
+        ${K.range ? `<div class="field"><span>ถึงวันที่ (ถ้ามีหลายวัน)</span>${dateSel('rf-e', r.endDate, true)}</div>` : ''}</div>
+        <label class="field wide"><span>${K.detailLabel}${K.detailReq ? ' <span class="req">*</span>' : ''}</span><textarea id="rf-know" rows="${K.detailReq ? 6 : 4}" placeholder="${esc(K.detailPh)}">${esc(r.knowledge || '')}</textarea></label>
       </div>
       <div class="field"><span>รูปภาพหลักฐาน (2 รูป)</span>
         <div class="photo-pick">${[0, 1].map(i => `<div class="pp" data-i="${i}"><div class="pv"></div><div class="row"><label class="btn sm" for="rf-ph${i}">เลือกรูปที่ ${i + 1}</label><input type="file" accept="image/*" id="rf-ph${i}"><button type="button" class="btn sm danger" data-rm>ลบรูป</button></div></div>`).join('')}</div>
@@ -600,7 +676,7 @@
       foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="rf-save">บันทึกรายการ</button>`
     });
     const el = m.el;
-    $('#rf-year', el).onchange = e => { $('#rf-proj', el).innerHTML = projOpts(e.target.value); };
+    if (K.project) $('#rf-year', el).onchange = e => { $('#rf-proj', el).innerHTML = projOpts(e.target.value); };
     const paint = i => {
       const pv = $(`.pp[data-i="${i}"] .pv`, el);
       pv.innerHTML = previews[i] ? `<img src="${esc(previews[i])}" alt="ตัวอย่างรูปที่ ${i + 1}">` : `<div class="ph">ยังไม่มีรูปที่ ${i + 1}</div>`;
@@ -620,22 +696,23 @@
       $(`.pp[data-i="${i}"] [data-rm]`, el).onclick = () => { photos[i] = null; previews[i] = ''; paint(i); };
     });
     $('#rf-save', el).onclick = async () => {
-      const startDate = readDate(el, 'rf-s'), endDate = readDate(el, 'rf-e');
+      const val = id => { const x = $(id, el); return x ? x.value.trim() : ''; };
+      const startDate = readDate(el, 'rf-s'), endDate = K.range ? readDate(el, 'rf-e') : '';
       const rec = {
-        id: r.id, staffId: r.staffId, year: $('#rf-year', el).value, projectId: $('#rf-proj', el).value, type: $('#rf-type', el).value,
-        hours: $('#rf-hours', el).value, title: $('#rf-title', el).value.trim(), place: $('#rf-place', el).value.trim(), organizer: $('#rf-org', el).value.trim(),
-        startDate, endDate, knowledge: $('#rf-know', el).value.trim()
+        id: r.id, staffId: r.staffId, kind, year: val('#rf-year'), projectId: K.project ? val('#rf-proj') : '', type: val('#rf-type'), level: K.level ? val('#rf-level') : '',
+        hours: K.hours ? val('#rf-hours') : '', title: val('#rf-title'), place: val('#rf-place'), organizer: val('#rf-org'), audience: K.audience ? val('#rf-aud') : '',
+        startDate, endDate, knowledge: val('#rf-know')
       };
-      if (!rec.title) return toast('กรุณากรอกชื่อเรื่อง / กิจกรรม', true);
-      if (!startDate || startDate === 'INVALID') return toast('วันที่เริ่มไม่ถูกต้อง', true);
+      if (!rec.title) return toast('กรุณากรอก' + K.titleLabel.split(' / ')[0], true);
+      if (!startDate || startDate === 'INVALID') return toast('วันที่ไม่ถูกต้อง', true);
       if (endDate === 'INVALID') return toast('วันที่สิ้นสุดไม่ถูกต้อง', true);
       if (endDate && endDate < startDate) return toast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม', true);
-      if (!rec.knowledge) return toast('กรุณาเขียนความรู้ที่ได้รับ', true);
+      if (K.detailReq && !rec.knowledge) return toast('กรุณากรอก' + K.detailShort, true);
       const ph = photos.map((p, i) => p === 'keep' ? 'keep' : p ? p : (r['photo' + (i + 1)] ? null : 'keep'));
       try {
         await busy(() => api('saveRecord', { record: rec, photos: ph }));
         m.close(); toast(isNew ? 'เพิ่มรายการแล้ว' : 'บันทึกการแก้ไขแล้ว');
-        if (rec.year !== S.fy && S.tab === 'dev') { S.fy = rec.year; const s = $('#dev-fy'); if (s) s.value = rec.year; }
+        if (rec.year !== S.fy && S.tab === K.tab) { S.fy = rec.year; const s = $('#dev-fy'); if (s) s.value = rec.year; }
         reload && reload();
       } catch (e) { }
     };
@@ -666,9 +743,11 @@
     v.innerHTML = `<div class="page-head"><div class="grow"><h1>ภาพรวมการพัฒนาบุคลากร</h1><div class="muted small" id="ov-range">${S.fy ? fyRange(S.fy) : ''}</div></div>
       <div class="actions"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('ov-fy', S.fy)}</label></div></div><div id="ov-body" class="stack"></div>`;
     $('#ov-fy').onchange = e => { S.fy = e.target.value; viewOverview(v); };
-    let staff, recs;
-    try { [staff, recs] = await busy(() => Promise.all([getStaff(), api('listRecords', { year: S.fy })])); } catch (e) { return; }
+    let staff, recs, allRecs;
+    try { [staff, allRecs] = await busy(() => Promise.all([getStaff(), api('listRecords', { year: S.fy })])); } catch (e) { return; }
     if (!v.isConnected) return;
+    recs = ofKind(allRecs, 'dev');
+    const awards = ofKind(allRecs, 'award'), talks = ofKind(allRecs, 'speaker');
     const by = {}; recs.forEach(r => (by[r.staffId] = by[r.staffId] || []).push(r));
     const rows = staff.map(s => ({ s, list: by[s.id] || [] })).sort((a, b) => sumHours(b.list) - sumHours(a.list) || b.list.length - a.list.length);
     const maxH = Math.max(1, ...rows.map(x => sumHours(x.list)));
@@ -682,19 +761,22 @@
         <div class="stat"><div class="v">${recs.length}</div><div class="k">รายการพัฒนาตนเอง</div></div>
         <div class="stat"><div class="v">${sumHours(recs).toLocaleString('th-TH')}</div><div class="k">ชั่วโมงพัฒนารวม</div></div>
         <div class="stat"><div class="v" style="color:${none ? 'var(--warn)' : 'var(--good)'}">${none}</div><div class="k">คนที่ยังไม่มีรายการ</div></div>
-        <div class="stat"><div class="v" style="color:${recs.some(r => !r.review) ? 'var(--warn)' : 'var(--good)'}">${recs.filter(r => !r.review).length}</div><div class="k">รายการรอตรวจ</div></div>
+        <div class="stat"><div class="v" style="color:${recs.some(r => !r.review) ? 'var(--warn)' : 'var(--good)'}">${recs.filter(r => !r.review).length}</div><div class="k">รายการพัฒนาฯ รอตรวจ</div></div>
+        <div class="stat click" data-go="awards" title="ไปที่ ${KIND.award.adminMenu}"><div class="v">${awards.length}</div><div class="k">โล่/รางวัล (${new Set(awards.map(r => r.staffId)).size} คน)${awards.some(r => !r.review) ? ` · <span style="color:var(--warn)">รอตรวจ ${awards.filter(r => !r.review).length}</span>` : ''}</div></div>
+        <div class="stat click" data-go="speakers" title="ไปที่ ${KIND.speaker.adminMenu}"><div class="v">${talks.length}</div><div class="k">งานวิทยากร (${sumHours(talks)} ชม.)${talks.some(r => !r.review) ? ` · <span style="color:var(--warn)">รอตรวจ ${talks.filter(r => !r.review).length}</span>` : ''}</div></div>
       </div>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
         ${projs.length || pc.OTHER ? `<div class="table-wrap"><table><thead><tr><th>โครงการ</th><th class="r">ผู้เข้าร่วม (คน)</th><th class="r">รายการ</th></tr></thead><tbody>
         ${projs.concat(pc.OTHER ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map(p => `<tr class="click" data-proj="${esc(p.id)}" title="ดูรายการของโครงการนี้"><td>${esc(p.name)} <span class="small muted">› ดูรายการ</span></td><td class="r num">${ppl[p.id] ? ppl[p.id].size : 0}</td><td class="r num">${pc[p.id] || 0}</td></tr>`).join('')}
         </tbody></table></div>` : `<p class="muted" style="margin:0">ยังไม่มีโครงการในปีนี้ เพิ่มได้ที่เมนู “ตั้งค่าปีงบ/โครงการ”</p>`}
       </section>
-      <section><div class="page-head" style="margin-bottom:.6rem"><div class="grow"><h2>รายบุคคล</h2><div class="small muted">คลิกที่ชื่อเพื่อดูประวัติและรายการพัฒนาตนเอง</div></div></div>
-      <div class="table-wrap"><table><thead><tr><th>ชื่อ-สกุล</th><th class="r">รายการ</th><th class="r">ชั่วโมง</th><th style="width:28%">สัดส่วนชั่วโมง</th><th>ล่าสุด</th></tr></thead><tbody>
+      <section><div class="page-head" style="margin-bottom:.6rem"><div class="grow"><h2>รายบุคคล</h2><div class="small muted">คลิกที่ชื่อเพื่อดูประวัติ รายการพัฒนาตนเอง โล่/รางวัล และงานวิทยากร</div></div></div>
+      <div class="table-wrap"><table><thead><tr><th>ชื่อ-สกุล</th><th class="r">รายการ</th><th class="r">ชั่วโมง</th><th style="width:28%">สัดส่วนชั่วโมง</th><th class="r">รางวัล</th><th class="r">วิทยากร</th><th>ล่าสุด</th></tr></thead><tbody>
       ${rows.map(({ s, list }) => `<tr class="click" data-id="${esc(s.id)}"><td>${esc(fullName(s))}</td><td class="r num">${list.length || '<span class="chip warn">ยังไม่มี</span>'}</td><td class="r num">${sumHours(list) || '—'}</td>
-        <td><div class="bar"><i style="width:${(sumHours(list) / maxH * 100).toFixed(1)}%"></i></div></td><td class="small num">${list[0] ? esc(thDate(list[0].startDate, true)) : '—'}</td></tr>`).join('')}
+        <td><div class="bar"><i style="width:${(sumHours(list) / maxH * 100).toFixed(1)}%"></i></div></td><td class="r num">${awards.filter(r => r.staffId === s.id).length || '—'}</td><td class="r num">${talks.filter(r => r.staffId === s.id).length || '—'}</td><td class="small num">${list[0] ? esc(thDate(list[0].startDate, true)) : '—'}</td></tr>`).join('')}
       </tbody></table></div></section>`;
     $$('#ov-body tr.click[data-id]').forEach(tr => tr.onclick = () => staffDetail(staff.find(s => s.id === tr.dataset.id), () => viewOverview(v)));
+    $$('#ov-body [data-go]').forEach(el => el.onclick = () => { S.tab = el.dataset.go; store.set('hr_tab_' + S.role, S.tab); render(); });
     $$('#ov-body tr.click[data-proj]').forEach(tr => tr.onclick = () => { S.cache.recPreset = { fy: S.fy, proj: tr.dataset.proj }; S.tab = 'records'; render(); });
   }
 
@@ -707,8 +789,8 @@
       body: `<div class="toolbar">${FB && !s.hasAccount ? '<span class="chip bad">ยังไม่มีบัญชีเข้าสู่ระบบ</span>' : `<span class="chip ${s.pwChanged ? 'good' : 'warn'}">${s.pwChanged ? 'เปลี่ยนรหัสผ่านแล้ว' : 'รหัสผ่านเริ่มต้น (เบอร์โทร)'}</span>`}
         ${FB && s.hasAccount ? (s.loginEmail ? `<span class="chip">อีเมลรีเซ็ตรหัส: ${esc(s.loginEmail)}</span>` : '<span class="chip warn">บัญชีไม่มีอีเมล รีเซ็ตรหัสทางอีเมลไม่ได้</span>') : ''}${s.role === 'admin' ? '<span class="chip ink">ผู้บริหาร</span>' : ''}</div>
         ${profileHTML(s)}
-        <section class="panel"><h3>ประวัติการพัฒนาตนเอง (${recs.length} รายการ · ${sumHours(recs)} ชั่วโมง)</h3>
-        ${recs.length ? years.map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${recs.filter(r => r.year === y).map(r => recCard(r, { who: fullName(s), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`,
+        ${KINDS.map(k => { const kl = ofKind(recs, k); if (k !== 'dev' && !kl.length) return ''; return `<section class="panel"><h3>${k === 'dev' ? 'ประวัติการพัฒนาตนเอง' : KIND[k].head} (${kl.length} รายการ${KIND[k].hours ? ` · ${sumHours(kl)} ชั่วโมง` : ''})</h3>
+        ${kl.length ? years.filter(y => kl.some(r => r.year === y)).map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${kl.filter(r => r.year === y).map(r => recCard(r, { who: fullName(s), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`; }).join('')}`,
       foot: `<button class="btn danger" id="sd-del">ลบบุคลากร</button><button class="btn" id="sd-reset">${FB ? 'ส่งลิงก์รีเซ็ตรหัสผ่าน' : 'รีเซ็ตรหัสผ่าน'}</button>${FB ? '<button class="btn" id="sd-recreate">สร้างบัญชีใหม่</button>' : ''}<button class="btn" id="sd-pdf">ดาวน์โหลด PDF</button><button class="btn primary" id="sd-edit">แก้ไขข้อมูล</button>`
     });
     bindRecList(m.el, recs, () => { m.close(); staffDetail(s, reload); reload && reload(); });
@@ -753,22 +835,26 @@
     };
   }
 
-  async function viewRecords(v) {
+  // หน้าผู้บริหาร: ดูและตรวจรายการของทุกคน (แยกตามประเภท)
+  async function viewRecords(v, kind = 'dev') {
+    const K = KIND[kind];
     let staff; try { staff = await busy(() => getStaff()); } catch (e) { return; }
     if (!v.isConnected) return;
-    v.innerHTML = `<div class="page-head"><div class="grow"><h1>รายการพัฒนาตนเองของบุคลากร</h1><div class="muted small" id="rc-count"></div></div>
+    v.innerHTML = `<div class="page-head"><div class="grow"><h1>${K.adminHead}</h1><div class="muted small" id="rc-count"></div></div>
       <div class="actions"><button class="btn" id="rc-pdf">ดาวน์โหลด PDF</button></div></div>
       <div class="toolbar">
         <label class="field"><span>ปีงบประมาณ</span>${yearSelect('rc-fy', S.fy, true)}</label>
-        <label class="field"><span>โครงการ</span><select id="rc-proj"></select></label>
+        ${K.project ? '<label class="field"><span>โครงการ</span><select id="rc-proj"></select></label>' : ''}
+        ${K.level ? `<label class="field"><span>ระดับรางวัล</span><select id="rc-level"><option value="">ทุกระดับ</option>${AWARD_LEVELS.map(t => `<option>${t}</option>`).join('')}</select></label>` : ''}
         <label class="field"><span>บุคลากร</span><select id="rc-staff"><option value="">ทุกคน</option>${staff.map((s, i) => `<option value="${esc(s.id)}">${i + 1}. ${esc(fullName(s))}</option>`).join('')}</select></label>
-        <label class="field"><span>ประเภท</span><select id="rc-type"><option value="">ทุกประเภท</option>${DEV_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
+        <label class="field"><span>${K.typeLabel}</span><select id="rc-type"><option value="">ทุกประเภท</option>${K.types.map(t => `<option>${t}</option>`).join('')}</select></label>
         <label class="field"><span>สถานะการตรวจ</span><select id="rc-rv"><option value="all">ทุกสถานะ</option><option value="">รอตรวจ</option><option value="approved">ตรวจแล้ว</option><option value="revise">ส่งกลับแก้ไข</option></select></label>
       </div><div id="rc-body" class="stack"></div>`;
     const name = id => { const s = staff.find(x => x.id === id); return s ? fullName(s) : id; };
-    const preset = S.cache.recPreset; S.cache.recPreset = null;
+    const preset = kind === 'dev' ? S.cache.recPreset : null; if (preset) S.cache.recPreset = null;
     if (preset) $('#rc-fy').value = preset.fy;
     const fillProj = () => {
+      if (!K.project) return;
       const y = $('#rc-fy').value;
       $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map((p, i) => `<option value="${esc(p.id)}">${i + 1}. ${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">อื่น ๆ (นอกโครงการ)</option>`;
     };
@@ -776,7 +862,7 @@
     // silent = โหลดเบื้องหลังจากการแจ้งเตือนเรียลไทม์ (ไม่ขึ้นหน้าจอโหลด และคงตัวกรอง/ตำแหน่งเลื่อนไว้)
     const load = async silent => {
       try {
-        const res = await (silent ? api('listRecords', { year: $('#rc-fy').value }) : busy(() => api('listRecords', { year: $('#rc-fy').value })));
+        const res = ofKind(await (silent ? api('listRecords', { year: $('#rc-fy').value }) : busy(() => api('listRecords', { year: $('#rc-fy').value }))), kind);
         if (silent && known) res.forEach(r => { if (!known.has(r.id)) r._new = true; });
         known = new Set(res.map(r => r.id));
         all = res;
@@ -786,19 +872,20 @@
       refreshPending();
     };
     S.recLive = () => { if (v.isConnected) load(true); };
-    const filtered = () => all.filter(r => (!$('#rc-proj').value || r.projectId === $('#rc-proj').value) && (!$('#rc-staff').value || r.staffId === $('#rc-staff').value) && (!$('#rc-type').value || r.type === $('#rc-type').value) && ($('#rc-rv').value === 'all' || (r.review || '') === $('#rc-rv').value));
+    const fv = id => { const x = $(id); return x ? x.value : ''; };
+    const filtered = () => all.filter(r => (!fv('#rc-proj') || r.projectId === fv('#rc-proj')) && (!fv('#rc-level') || r.level === fv('#rc-level')) && (!fv('#rc-staff') || r.staffId === fv('#rc-staff')) && (!fv('#rc-type') || r.type === fv('#rc-type')) && (fv('#rc-rv') === 'all' || (r.review || '') === fv('#rc-rv')));
     const draw = () => {
       const list = filtered();
-      $('#rc-count').textContent = `${list.length} รายการ · ${sumHours(list)} ชั่วโมง · รอตรวจ ${list.filter(r => !r.review).length} รายการ`;
+      $('#rc-count').textContent = `${list.length} รายการ${K.hours ? ` · ${sumHours(list)} ชั่วโมง` : ''} · รอตรวจ ${list.filter(r => !r.review).length} รายการ`;
       $('#rc-body').innerHTML = list.length ? `<div class="recs">${list.map(r => recCard(r, { who: name(r.staffId), mode: r.staffId === S.user.id ? 'view' : 'review', isNew: r._new })).join('')}</div>` : `<div class="empty-state">ไม่พบรายการตามเงื่อนไขที่เลือก</div>`;
       bindRecList($('#rc-body'), list, load);
     };
     $('#rc-fy').onchange = () => { fillProj(); load(); };
-    ['#rc-proj', '#rc-staff', '#rc-type', '#rc-rv'].forEach(s => $(s).onchange = draw);
+    ['#rc-proj', '#rc-level', '#rc-staff', '#rc-type', '#rc-rv'].forEach(id => { const x = $(id); if (x) x.onchange = draw; });
     $('#rc-pdf').onclick = () => {
-      const sel = id => { const o = $(id).selectedOptions[0]; return o && o.value ? o.textContent : ''; };
-      const sub = [sel('#rc-fy') || 'ทุกปีงบประมาณ', sel('#rc-proj'), sel('#rc-staff'), sel('#rc-type')].filter(Boolean).join(' · ');
-      reportRecords(filtered(), name, sub);
+      const sel = id => { const x = $(id); const o = x && x.selectedOptions[0]; return o && o.value ? o.textContent : ''; };
+      const sub = [sel('#rc-fy') || 'ทุกปีงบประมาณ', sel('#rc-proj'), sel('#rc-level'), sel('#rc-staff'), sel('#rc-type')].filter(Boolean).join(' · ');
+      reportRecords(filtered(), name, sub, kind);
     };
     fillProj();
     if (preset) $('#rc-proj').value = preset.proj;
@@ -919,7 +1006,16 @@
         };
         if (y > 0) fitTable(CH - y - gap);
         let need = r.height;
-        if (el.tagName === 'H2' && blocks[i + 1]) need += Math.min(blocks[i + 1].tagName === 'TABLE' ? 90 : blocks[i + 1].getBoundingClientRect().height, CH * 0.35);
+        // หัวข้อต้องอยู่หน้าเดียวกับเนื้อหาส่วนแรกของมัน (สรุปสั้น ๆ + รายการแรก/หัวตาราง)
+        if (el.tagName === 'H2') {
+          for (let j = i + 1; blocks[j]; j++) {
+            const nb = blocks[j], h = nb.getBoundingClientRect().height + 12;
+            if (nb.tagName === 'TABLE') { need += 90; break; }
+            if (nb.tagName === 'H2') break;
+            if (nb.classList.contains('rp-rec') || h > CH * 0.35) { need += Math.min(h, CH * 0.35); break; }
+            need += h;
+          }
+        }
         if (y > 0 && y + gap + Math.min(need, CH) > CH) { pages.push([]); y = 0; fitTable(CH); }
         else if (y > 0) y += gap;
         else fitTable(CH);
@@ -982,30 +1078,45 @@
   }
 
   function rpRecord(r, n, who) {
-    const ph = ['photo1', 'photo2'].map((k, i) => r[k] && photoUrl(r[k]) ? `<div class="rp-img" style="background-image:url('${photoUrl(r[k]).replace(/'/g, '%27')}')"></div>` : `<div class="rp-none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
+    const K = KIND[kindOf(r)];
+    const ph = ['photo1', 'photo2'].map((f, i) => r[f] && photoUrl(r[f]) ? `<div class="rp-img" style="background-image:url('${photoUrl(r[f]).replace(/'/g, '%27')}')"></div>` : `<div class="rp-none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
+    const row = (l, v) => `<tr><td>${l}</td><td>${esc(v || '-')}</td></tr>`;
     return `<div class="rp-rec"><div class="rp-t">${n}. ${esc(r.title)}</div>
-      <div class="rp-m">${who ? `<b>${esc(who)}</b> · ` : ''}${esc(r.type || '')} · ${esc(thRange(r.startDate, r.endDate))}${r.hours ? ` · ${esc(r.hours)} ชั่วโมง` : ''}</div>
-      <table class="rp-kv"><tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>
-      <tr><td>สถานที่</td><td>${esc(r.place || '-')}</td></tr><tr><td>หน่วยงานผู้จัด</td><td>${esc(r.organizer || '-')}</td></tr>
+      <div class="rp-m">${who ? `<b>${esc(who)}</b> · ` : ''}${esc(r.type || '')}${K.level && r.level ? ` · ${esc(r.level)}` : ''} · ${esc(thRange(r.startDate, r.endDate))}${K.hours && r.hours ? ` · ${esc(r.hours)} ชั่วโมง` : ''}</div>
+      <table class="rp-kv">${K.project ? `<tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>` : row('ปีงบประมาณ', r.year)}
+      ${K.level ? row('ระดับรางวัล', r.level) : ''}${row(K.orgLabel, r.organizer)}${row(K.placeLabel, r.place)}${K.audience ? row('กลุ่มผู้เข้าร่วม / จำนวน', r.audience) : ''}
       <tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>
-      <div class="rp-k">ความรู้ที่ได้รับ / การนำไปใช้</div><p class="rp-p">${esc(r.knowledge || '-')}</p><div class="rp-ph">${ph}</div></div>`;
+      ${K.detailReq || r.knowledge ? `<div class="rp-k">${K.detailLabel}</div><p class="rp-p">${esc(r.knowledge || '-')}</p>` : ''}<div class="rp-ph">${ph}</div></div>`;
   }
 
-  function reportPerson(u, recs, { year, profile, project = '' }) {
+  const byDate = list => list.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+  function rpSummary(kind, list) {
+    if (kind === 'award') return `<span>จำนวน <b>${list.length}</b> รางวัล</span>${AWARD_LEVELS.filter(l => list.some(r => r.level === l)).map(l => `<span>${l} <b>${list.filter(r => r.level === l).length}</b></span>`).join('')}`;
+    if (kind === 'speaker') return `<span>จำนวน <b>${list.length}</b> ครั้ง</span><span>รวม <b>${sumHours(list)}</b> ชั่วโมง</span>`;
+    return `<span>จำนวน <b>${list.length}</b> รายการ</span><span>รวม <b>${sumHours(list)}</b> ชั่วโมง</span><span>ศึกษาดูงาน <b>${list.filter(r => r.type === 'ศึกษาดูงาน').length}</b> ครั้ง</span>`;
+  }
+
+  // kind = ประเภทเดียว (หน้าของครู) · ไม่ระบุ kind + profile = ประวัติพร้อมทุกประเภท (หน้าผู้บริหาร)
+  function reportPerson(u, recs, { year, profile, project = '', kind }) {
     const name = fullName(u);
+    const kinds = kind ? [kind] : KINDS;
     const build = () => { let body = profile ? rpProfile(u) : `<table class="rp-kv"><tr><td>ชื่อ-สกุล</td><td>${esc(name)}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(u.position || '-')}</td></tr><tr><td>วุฒิการศึกษา / วิชาเอก</td><td>${esc([u.education, u.major].filter(Boolean).join(' / ') || '-')}</td></tr></table>`;
     if (recs) {
-      const sorted = recs.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
-      body += `<h2>การพัฒนาตนเอง${year ? ` ปีงบประมาณ พ.ศ. ${esc(year)}` : ''}</h2>${project ? `<table class="rp-kv"><tr><td>โครงการ</td><td>${esc(project)}</td></tr></table>` : ''}
-        <div class="rp-sum"><span>จำนวน <b>${sorted.length}</b> รายการ</span><span>รวม <b>${sumHours(sorted)}</b> ชั่วโมง</span><span>ศึกษาดูงาน <b>${sorted.filter(r => r.type === 'ศึกษาดูงาน').length}</b> ครั้ง</span></div>
-        ${sorted.length ? sorted.map((r, i) => rpRecord(r, i + 1)).join('') : '<div class="rp-empty">ยังไม่มีรายการ</div>'}
-        <div class="rp-sign"><div>ลงชื่อ ..................................................<br>( ${esc(name)} )<br>ผู้รายงาน</div><div>ลงชื่อ ..................................................<br>( .................................................. )<br>ผู้อำนวยการ</div></div>`;
+      kinds.forEach(k => {
+        const sorted = byDate(ofKind(recs, k));
+        if (!kind && k !== 'dev' && !sorted.length) return;
+        body += `<h2>${k === 'dev' ? 'การพัฒนาตนเอง' : KIND[k].head}${year ? ` ปีงบประมาณ พ.ศ. ${esc(year)}` : ''}</h2>${project && k === 'dev' ? `<table class="rp-kv"><tr><td>โครงการ</td><td>${esc(project)}</td></tr></table>` : ''}
+          <div class="rp-sum">${rpSummary(k, sorted)}</div>
+          ${sorted.length ? sorted.map((r, i) => rpRecord(r, i + 1)).join('') : '<div class="rp-empty">ยังไม่มีรายการ</div>'}`;
+      });
+      body += `<div class="rp-sign"><div>ลงชื่อ ..................................................<br>( ${esc(name)} )<br>ผู้รายงาน</div><div>ลงชื่อ ..................................................<br>( .................................................. )<br>ผู้อำนวยการ</div></div>`;
     }
     return body; };
+    const K = KIND[kind || 'dev'];
     openReport({
-      title: recs ? (profile ? 'ประวัติบุคลากรและการพัฒนาตนเอง' : 'รายงานการพัฒนาตนเอง') : 'ประวัติส่วนตัวบุคลากร',
+      title: recs ? (profile ? 'ประวัติบุคลากรและผลการปฏิบัติงาน' : K.report) : 'ประวัติส่วนตัวบุคลากร',
       subtitle: name + (year ? ` · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : ''), build, recs: recs || [],
-      filename: [recs ? (profile ? 'ประวัติและการพัฒนาตนเอง' : 'การพัฒนาตนเอง') : 'ประวัติส่วนตัว', u.firstName, u.lastName, year, project ? project.slice(0, 40) : ''].filter(Boolean).join(' ')
+      filename: [recs ? (profile ? 'ประวัติและผลการปฏิบัติงาน' : K.file) : 'ประวัติส่วนตัว', u.firstName, u.lastName, year, project ? project.slice(0, 40) : ''].filter(Boolean).join(' ')
     });
   }
 
@@ -1018,15 +1129,16 @@
     openReport({ title: 'ทะเบียนข้อมูลบุคลากร', subtitle: `จำนวน ${list.length} คน`, build: () => body, landscape: true, filename: 'ทะเบียนข้อมูลบุคลากร' });
   }
 
-  function reportRecords(list, nameFn, subtitle) {
+  function reportRecords(list, nameFn, subtitle, kind = 'dev') {
+    const K = KIND[kind];
     const by = {}; list.forEach(r => (by[r.staffId] = by[r.staffId] || []).push(r));
     const rows = Object.keys(by).map(id => ({ id, n: nameFn(id), list: by[id] })).sort((a, b) => a.n.localeCompare(b.n, 'th'));
-    const build = () => `<h2>สรุปรายบุคคล</h2><div class="rp-sum"><span>รวม <b>${list.length}</b> รายการ</span><span><b>${sumHours(list)}</b> ชั่วโมง</span><span>บุคลากร <b>${rows.length}</b> คน</span></div>
-      <table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th class="r">จำนวนรายการ</th><th class="r">ชั่วโมง</th></tr></thead><tbody>
-      ${rows.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(x.n)}</td><td class="r">${x.list.length}</td><td class="r">${sumHours(x.list)}</td></tr>`).join('') || '<tr><td colspan="4" class="c">ไม่มีรายการ</td></tr>'}
+    const build = () => `<h2>สรุปรายบุคคล</h2><div class="rp-sum">${rpSummary(kind, list)}<span>บุคลากร <b>${rows.length}</b> คน</span></div>
+      <table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th class="r">จำนวนรายการ</th>${K.hours ? '<th class="r">ชั่วโมง</th>' : ''}</tr></thead><tbody>
+      ${rows.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(x.n)}</td><td class="r">${x.list.length}</td>${K.hours ? `<td class="r">${sumHours(x.list)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${K.hours ? 4 : 3}" class="c">ไม่มีรายการ</td></tr>`}
       </tbody></table>
-      ${rows.map(x => `<h2>${esc(x.n)}</h2>${x.list.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate))).map((r, i) => rpRecord(r, i + 1)).join('')}`).join('')}`;
-    openReport({ title: 'รายงานการพัฒนาตนเองของบุคลากร', subtitle, build, recs: list, filename: 'รายงานการพัฒนาตนเองของบุคลากร ' + (subtitle.match(/\d{4}/) || [''])[0] });
+      ${rows.map(x => `<h2>${esc(x.n)}</h2>${byDate(x.list).map((r, i) => rpRecord(r, i + 1)).join('')}`).join('')}`;
+    openReport({ title: K.reportAll, subtitle, build, recs: list, filename: K.reportAll + ' ' + (subtitle.match(/\d{4}/) || [''])[0] });
   }
 
   function viewSettings(v) {
@@ -1143,7 +1255,9 @@
         { id: 'S003', prefix: 'นาง', firstName: 'วรรณา', lastName: 'บุญมา (ตัวอย่าง)', position: 'ครู กศน.ตำบล', citizenId: '0000000000003', address: '9 ม.1 ต.ตัวอย่าง อ.ตัวอย่าง จ.เชียงราย', phone: '0833333333', birthDay: '2', birthMonth: '1', birthYear: '2522', email: '', education: 'ปริญญาตรี', major: 'การศึกษานอกระบบ', salary: '31000', insignia: 'จ.ม.', role: '' }
       ].map(s => Object.assign({ pw: '', pwChanged: false }, s)),
       records: [
-        { id: 'R1', staffId: 'S001', year: '2570', projectId: 'P2', projectName: 'โครงการศึกษาดูงานแหล่งเรียนรู้ต้นแบบ', type: 'ศึกษาดูงาน', title: 'ศึกษาดูงานศูนย์เรียนรู้เศรษฐกิจพอเพียง (ตัวอย่าง)', place: 'ศูนย์เรียนรู้ ต.ตัวอย่าง', organizer: 'สกร.ระดับอำเภอ', startDate: '2026-10-02', endDate: '2026-10-03', hours: '12', knowledge: 'เรียนรู้การจัดการแปลงเกษตรผสมผสานและการทำบัญชีครัวเรือน นำไปปรับใช้ในการจัดกิจกรรมการศึกษาต่อเนื่องให้ผู้เรียนในตำบล', photo1: '', photo2: '' }
+        { id: 'R1', staffId: 'S001', year: '2570', projectId: 'P2', projectName: 'โครงการศึกษาดูงานแหล่งเรียนรู้ต้นแบบ', type: 'ศึกษาดูงาน', title: 'ศึกษาดูงานศูนย์เรียนรู้เศรษฐกิจพอเพียง (ตัวอย่าง)', place: 'ศูนย์เรียนรู้ ต.ตัวอย่าง', organizer: 'สกร.ระดับอำเภอ', startDate: '2026-10-02', endDate: '2026-10-03', hours: '12', knowledge: 'เรียนรู้การจัดการแปลงเกษตรผสมผสานและการทำบัญชีครัวเรือน นำไปปรับใช้ในการจัดกิจกรรมการศึกษาต่อเนื่องให้ผู้เรียนในตำบล', photo1: '', photo2: '' },
+        { id: 'R2', kind: 'award', staffId: 'S001', year: '2570', projectId: '', projectName: '', type: 'เกียรติบัตร', level: 'ระดับจังหวัด', title: 'ครู กศน.ตำบลดีเด่น (ตัวอย่าง)', place: 'หอประชุมจังหวัด', organizer: 'สกร.จังหวัด', startDate: '2026-11-16', endDate: '', hours: '', knowledge: '', photo1: '', photo2: '' },
+        { id: 'R3', kind: 'speaker', staffId: 'S002', year: '2570', projectId: '', projectName: '', type: 'บรรยาย', title: 'การทำบัญชีครัวเรือน (ตัวอย่าง)', place: 'ศาลาอเนกประสงค์ ม.4', organizer: 'องค์การบริหารส่วนตำบล', audience: 'ผู้สูงอายุ 30 คน', startDate: '2026-12-05', endDate: '', hours: '3', knowledge: 'บรรยายและฝึกปฏิบัติการบันทึกรายรับรายจ่าย', photo1: '', photo2: '' }
       ]
     });
     let db;
@@ -1200,7 +1314,7 @@
             let r = db.records.slice();
             if (!isAdmin || q.mine) r = r.filter(x => x.staffId === ses.id); else if (q.staffId) r = r.filter(x => x.staffId === q.staffId);
             if (q.year) r = r.filter(x => x.year === q.year);
-            return ok(r.sort((a, b) => b.startDate.localeCompare(a.startDate)));
+            return ok(r.map(x => Object.assign({ kind: kindOf(x) }, x)).sort((a, b) => b.startDate.localeCompare(a.startDate)));
           }
           case 'saveRecord': {
             const d = q.record; let r = d.id ? db.records.find(x => x.id === d.id) : null;
@@ -1208,8 +1322,13 @@
             if (r && r.staffId !== ses.id) return err('แก้ไขได้เฉพาะรายการของตนเอง');
             if (!r) { if (ses.id === 'ADMIN') return err('บัญชีผู้ดูแลไม่สามารถบันทึกรายการของตนเองได้'); r = { id: 'R' + Date.now(), staffId: ses.id }; db.records.push(r); }
             Object.assign(r, { review: '', reviewNote: '', reviewBy: '', reviewAt: '' });
-            ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'startDate', 'endDate', 'hours', 'knowledge'].forEach(k => r[k] = d[k] || '');
-            const p = db.projects.find(x => x.id === d.projectId); r.projectName = p ? p.name : 'อื่น ๆ (นอกโครงการ)';
+            const kind = kindOf(d);
+            if (r.kind && kindOf(r) !== kind) return err('เปลี่ยนประเภทรายการไม่ได้');
+            ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge'].forEach(k => r[k] = d[k] || '');
+            r.kind = kind;
+            const p = kind === 'dev' ? db.projects.find(x => x.id === d.projectId) : null;
+            if (kind !== 'dev') r.projectId = '';
+            r.projectName = kind !== 'dev' ? '' : p ? p.name : 'อื่น ๆ (นอกโครงการ)';
             (q.photos || []).forEach((ph, i) => { if (ph === 'keep') return; r['photo' + (i + 1)] = ph && ph.data ? ph.data : ''; });
             save(); return ok(r);
           }

@@ -99,6 +99,7 @@ tbody tr:nth-child(even) { background: color-mix(in srgb, var(--surface-2) 70%, 
 /* ---------- Shell ---------- */
 /* แถบชื่อระบบ + เมนู ติดด้านบนไปด้วยกันเวลาเลื่อนหน้า (เมนูไม่ถูกบัง) */
 .appbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; box-shadow: 0 2px 8px rgba(20, 35, 60, .08); }
+.appbar.tall { position: relative; }
 .topbar { background: var(--ink); color: var(--ink-fg); border-bottom: 3px solid var(--accent); }
 .topbar-in { max-width: 1080px; margin: 0 auto; padding: .7rem 16px; display: flex; align-items: center; gap: 1rem; }
 .brand { display: flex; flex-direction: column; min-width: 0; }
@@ -145,6 +146,8 @@ main { max-width: 1080px; margin: 0 auto; padding: 1.5rem 16px 4rem; display: fl
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: .9rem 1rem; }
 .stat .v { font-family: var(--font-display); font-size: 1.7rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .stat .k { font-size: .85rem; color: var(--muted); }
+.stat.click { cursor: pointer; transition: border-color .15s, transform .15s; }
+.stat.click:hover { border-color: var(--accent); transform: translateY(-1px); }
 
 /* records */
 .recs { display: flex; flex-direction: column; gap: .9rem; }
@@ -174,6 +177,7 @@ main { max-width: 1080px; margin: 0 auto; padding: 1.5rem 16px 4rem; display: fl
 .chip.good { background: var(--good-soft); color: var(--good); }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
 .chip.bad { background: var(--bad-soft); color: var(--bad); }
+.chip.accent { background: var(--accent-soft); color: color-mix(in srgb, var(--accent) 65%, var(--fg)); }
 .empty-state { text-align: center; padding: 2.5rem 1rem; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--r); background: var(--surface); }
 
 /* tables */

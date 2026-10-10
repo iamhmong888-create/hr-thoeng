@@ -17,7 +17,10 @@ const STAFF_FIELDS = ['id', 'prefix', 'firstName', 'lastName', 'position', 'citi
 // ครูแก้ไขข้อมูลของตนเองได้ทุกช่อง ยกเว้นสิทธิ์การใช้งาน (role)
 const TEACHER_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id' && k !== 'role');
 const ADMIN_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id');
-const REC_FIELDS = ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'startDate', 'endDate', 'hours', 'knowledge'];
+const REC_FIELDS = ['kind', 'year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge'];
+// ประเภทรายการ: dev = การพัฒนาตนเอง (รายการเดิมที่ไม่มี kind) · award = โล่/รางวัล · speaker = วิทยากร
+const KINDS = ['dev', 'award', 'speaker'];
+const kindOf = r => KINDS.includes(r && r.kind) ? r.kind : 'dev';
 const NO_EMAIL_DOMAIN = 'no-email.local';
 const PREFIXES = ['นางสาว', 'น.ส.', 'นาย', 'นาง', 'ครู'];
 
@@ -150,6 +153,7 @@ export function create(CFG) {
   function recOut(id, r) {
     const o = { id };
     ['staffId', ...REC_FIELDS, 'projectName', 'createdAt', 'updatedAt', 'review', 'reviewNote', 'reviewBy', 'reviewAt'].forEach(k => o[k] = r[k] === undefined ? '' : String(r[k]));
+    o.kind = kindOf(r);
     o.photo1 = r.hasPhoto1 ? `fs:${id}:1` : '';
     o.photo2 = r.hasPhoto2 ? `fs:${id}:2` : '';
     return o;
@@ -310,10 +314,14 @@ export function create(CFG) {
       if (!r.startDate) throw new Error('กรุณาเลือกวันที่');
       const m = await getMeta();
       if (!m.years.includes(String(r.year))) throw new Error('ไม่พบปีงบประมาณนี้');
-      const p = m.projects.find(p => p.id === r.projectId);
+      const kind = kindOf(r);
+      if (old && kindOf(old) !== kind) throw new Error('เปลี่ยนประเภทรายการไม่ได้');
+      const p = kind === 'dev' ? m.projects.find(p => p.id === r.projectId) : null;
       // แก้ไขรายการแล้ว สถานะกลับเป็น "รอตรวจ" เพื่อให้ผู้บริหารตรวจใหม่
-      const out = { staffId, updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), projectName: p ? p.name : 'อื่น ๆ (นอกโครงการ)', review: '', reviewNote: '', reviewBy: '', reviewAt: '' };
+      const out = { staffId, updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), projectName: kind !== 'dev' ? '' : p ? p.name : 'อื่น ๆ (นอกโครงการ)', review: '', reviewNote: '', reviewBy: '', reviewAt: '' };
       REC_FIELDS.forEach(k => out[k] = String(r[k] === undefined || r[k] === null ? '' : r[k]).trim());
+      out.kind = kind;
+      if (kind !== 'dev') out.projectId = '';
       const photos = q.photos || ['keep', 'keep'];
       const ph = { staffId };
       [1, 2].forEach(n => {
@@ -500,7 +508,7 @@ export function create(CFG) {
 
   return {
     // ติดตามจำนวนรายการรอตรวจแบบเรียลไทม์ (เฉพาะผู้บริหาร) คืนค่าฟังก์ชันสำหรับหยุดติดตาม
-    // cb(จำนวนรอตรวจ) ทุกครั้งที่ข้อมูลเปลี่ยน · onState(true/false) = การเชื่อมต่อเรียลไทม์ใช้งานได้หรือไม่
+    // cb({dev, award, speaker} จำนวนรอตรวจแยกประเภท) ทุกครั้งที่ข้อมูลเปลี่ยน · onState(true/false) = การเชื่อมต่อเรียลไทม์ใช้งานได้หรือไม่
     // ถ้าการเชื่อมต่อหลุด (เน็ตหลุด/เครือข่ายบล็อก) จะลองเชื่อมใหม่อัตโนมัติ
     watchPending(cb, onState = () => { }) {
       let unsub = null, stopped = false, retryT = null, wait = 3000;
@@ -508,7 +516,9 @@ export function create(CFG) {
         if (stopped || c.role !== 'admin') return;
         unsub = onSnapshot(C('records'), snap => {
           wait = 3000; onState(true);
-          cb(snap.docs.filter(d => { const r = d.data(); return !r.review && r.staffId !== c.staffId; }).length);
+          const n = { dev: 0, award: 0, speaker: 0 };
+          snap.docs.forEach(d => { const r = d.data(); if (!r.review && r.staffId !== c.staffId) n[kindOf(r)]++; });
+          cb(n);
         }, () => {
           onState(false);
           if (unsub) { unsub(); unsub = null; }
