@@ -441,7 +441,7 @@
       <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('dev-fy', S.fy)}</label></div></div>
       <div class="print-only"><h2>${esc(fullName(S.user))}</h2></div>
       <div id="dev-body" class="stack"><div class="empty-state">กำลังโหลด…</div></div>`;
-    $('#dev-fy').onchange = e => { S.fy = e.target.value; loadDev(); };
+    $('#dev-fy').onchange = e => { S.fy = e.target.value; S.devProj = ''; loadDev(); };
     loadDev();
   }
 
@@ -452,20 +452,28 @@
     try { list = await busy(() => api('listRecords', { year: S.fy, mine: true })); } catch (e) { return; }
     if (!box.isConnected) return;
     const projs = S.meta.projects.filter(p => p.year === S.fy);
+    const projName = id => id === 'OTHER' ? 'อื่น ๆ (นอกโครงการ)' : ((projs.find(p => p.id === id) || {}).name || '');
+    if (S.devProj && !projName(S.devProj)) S.devProj = '';
+    const shown = S.devProj ? list.filter(r => r.projectId === S.devProj) : list;
     box.innerHTML = `
       <div class="stats">
         <div class="stat"><div class="v">${list.length}</div><div class="k">รายการทั้งหมด</div></div>
         <div class="stat"><div class="v">${sumHours(list).toLocaleString('th-TH')}</div><div class="k">ชั่วโมงพัฒนารวม</div></div>
         <div class="stat"><div class="v">${list.filter(r => r.type === 'ศึกษาดูงาน').length}</div><div class="k">ศึกษาดูงาน</div></div>
-        <div class="stat"><div class="v">${new Set(list.map(r => r.projectId).filter(Boolean)).size}<span class="small muted"> / ${projs.length}</span></div><div class="k">โครงการที่เข้าร่วม</div></div>
+        <div class="stat"><div class="v">${new Set(list.map(r => r.projectId).filter(id => id && id !== 'OTHER')).size}<span class="small muted"> / ${projs.length}</span></div><div class="k">โครงการที่เข้าร่วม</div></div>
       </div>
-      <div class="page-head no-print" style="margin-top:.4rem"><div class="grow"><h2>รายการ ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)}</div></div>
-        <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="dev-add">+ เพิ่มรายการพัฒนาตนเอง</button></div></div>
+      <div class="page-head no-print" style="margin-top:.4rem"><div class="grow"><h2>รายการ ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)}${S.devProj ? ` · แสดง ${shown.length} จาก ${list.length} รายการ` : ''}</div></div>
+        <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">+ เพิ่มรายการพัฒนาตนเอง</button></div></div>
+      <div class="toolbar no-print"><label class="field" style="flex:1 1 320px"><span>แสดงเฉพาะโครงการ</span><select id="dev-proj">
+        <option value="">ทุกโครงการ (${list.length} รายการ)</option>
+        ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map(p => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
+      </select></label></div>
       ${list.some(r => r.review === 'revise') ? `<div class="notice revise-alert"><div class="grow"><b>มี ${list.filter(r => r.review === 'revise').length} รายการที่ผู้บริหารส่งกลับให้แก้ไข</b> อ่านความเห็นในรายการ แล้วกด “แก้ไข” เพื่อปรับปรุง เมื่อบันทึกแล้วสถานะจะกลับเป็น “รอตรวจ”</div></div>` : ''}
-      <div class="recs">${list.length ? list.map(r => recCard(r, { mode: 'own' })).join('') : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง</div>`}</div>`;
+      <div class="recs">${shown.length ? shown.map(r => recCard(r, { mode: 'own' })).join('') : list.length ? '<div class="empty-state">ยังไม่มีรายการในโครงการนี้</div>' : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง</div>`}</div>`;
     $('#dev-add').onclick = () => recordForm({ year: S.fy }, loadDev);
-    $('#dev-pdf').onclick = () => reportPerson(S.user, list, { year: S.fy, profile: false });
-    bindRecList(box, list, loadDev);
+    $('#dev-proj').onchange = e => { S.devProj = e.target.value; loadDev(); };
+    $('#dev-pdf').onclick = () => reportPerson(S.user, shown, { year: S.fy, profile: false, project: S.devProj ? projName(S.devProj) : '' });
+    bindRecList(box, shown, loadDev);
   }
 
   function dateSel(prefix, iso, allowEmpty) {
@@ -600,7 +608,7 @@
       </div>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
         ${projs.length || pc.OTHER ? `<div class="table-wrap"><table><thead><tr><th>โครงการ</th><th class="r">ผู้เข้าร่วม (คน)</th><th class="r">รายการ</th></tr></thead><tbody>
-        ${projs.concat(pc.OTHER ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map(p => `<tr><td>${esc(p.name)}</td><td class="r num">${ppl[p.id] ? ppl[p.id].size : 0}</td><td class="r num">${pc[p.id] || 0}</td></tr>`).join('')}
+        ${projs.concat(pc.OTHER ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map(p => `<tr class="click" data-proj="${esc(p.id)}" title="ดูรายการของโครงการนี้"><td>${esc(p.name)} <span class="small muted">› ดูรายการ</span></td><td class="r num">${ppl[p.id] ? ppl[p.id].size : 0}</td><td class="r num">${pc[p.id] || 0}</td></tr>`).join('')}
         </tbody></table></div>` : `<p class="muted" style="margin:0">ยังไม่มีโครงการในปีนี้ เพิ่มได้ที่เมนู “ตั้งค่าปีงบ/โครงการ”</p>`}
       </section>
       <section><div class="page-head" style="margin-bottom:.6rem"><div class="grow"><h2>รายบุคคล</h2><div class="small muted">คลิกที่ชื่อเพื่อดูประวัติและรายการพัฒนาตนเอง</div></div></div>
@@ -608,7 +616,8 @@
       ${rows.map(({ s, list }) => `<tr class="click" data-id="${esc(s.id)}"><td>${esc(fullName(s))}</td><td class="r num">${list.length || '<span class="chip warn">ยังไม่มี</span>'}</td><td class="r num">${sumHours(list) || '—'}</td>
         <td><div class="bar"><i style="width:${(sumHours(list) / maxH * 100).toFixed(1)}%"></i></div></td><td class="small num">${list[0] ? esc(thDate(list[0].startDate, true)) : '—'}</td></tr>`).join('')}
       </tbody></table></div></section>`;
-    $$('#ov-body tr.click').forEach(tr => tr.onclick = () => staffDetail(staff.find(s => s.id === tr.dataset.id), () => viewOverview(v)));
+    $$('#ov-body tr.click[data-id]').forEach(tr => tr.onclick = () => staffDetail(staff.find(s => s.id === tr.dataset.id), () => viewOverview(v)));
+    $$('#ov-body tr.click[data-proj]').forEach(tr => tr.onclick = () => { S.cache.recPreset = { fy: S.fy, proj: tr.dataset.proj }; S.tab = 'records'; render(); });
   }
 
   async function staffDetail(s, reload) {
@@ -679,6 +688,8 @@
         <label class="field"><span>สถานะการตรวจ</span><select id="rc-rv"><option value="all">ทุกสถานะ</option><option value="">รอตรวจ</option><option value="approved">ตรวจแล้ว</option><option value="revise">ส่งกลับแก้ไข</option></select></label>
       </div><div id="rc-body" class="stack"></div>`;
     const name = id => { const s = staff.find(x => x.id === id); return s ? fullName(s) : id; };
+    const preset = S.cache.recPreset; S.cache.recPreset = null;
+    if (preset) $('#rc-fy').value = preset.fy;
     const fillProj = () => {
       const y = $('#rc-fy').value;
       $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map(p => `<option value="${esc(p.id)}">${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">อื่น ๆ (นอกโครงการ)</option>`;
@@ -699,7 +710,9 @@
       const sub = [sel('#rc-fy') || 'ทุกปีงบประมาณ', sel('#rc-proj'), sel('#rc-staff'), sel('#rc-type')].filter(Boolean).join(' · ');
       reportRecords(filtered(), name, sub);
     };
-    fillProj(); load();
+    fillProj();
+    if (preset) $('#rc-proj').value = preset.proj;
+    load();
   }
 
   /* ---------------- PDF reports: สร้างไฟล์ PDF ในเครื่องแล้วดาวน์โหลดทันที ---------------- */
@@ -888,12 +901,12 @@
       <div class="rp-k">ความรู้ที่ได้รับ / การนำไปใช้</div><p class="rp-p">${esc(r.knowledge || '-')}</p><div class="rp-ph">${ph}</div></div>`;
   }
 
-  function reportPerson(u, recs, { year, profile }) {
+  function reportPerson(u, recs, { year, profile, project = '' }) {
     const name = fullName(u);
     const build = () => { let body = profile ? rpProfile(u) : `<table class="rp-kv"><tr><td>ชื่อ-สกุล</td><td>${esc(name)}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(u.position || '-')}</td></tr><tr><td>วุฒิการศึกษา / วิชาเอก</td><td>${esc([u.education, u.major].filter(Boolean).join(' / ') || '-')}</td></tr></table>`;
     if (recs) {
       const sorted = recs.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
-      body += `<h2>การพัฒนาตนเอง${year ? ` ปีงบประมาณ พ.ศ. ${esc(year)}` : ''}</h2>
+      body += `<h2>การพัฒนาตนเอง${year ? ` ปีงบประมาณ พ.ศ. ${esc(year)}` : ''}</h2>${project ? `<table class="rp-kv"><tr><td>โครงการ</td><td>${esc(project)}</td></tr></table>` : ''}
         <div class="rp-sum"><span>จำนวน <b>${sorted.length}</b> รายการ</span><span>รวม <b>${sumHours(sorted)}</b> ชั่วโมง</span><span>ศึกษาดูงาน <b>${sorted.filter(r => r.type === 'ศึกษาดูงาน').length}</b> ครั้ง</span></div>
         ${sorted.length ? sorted.map((r, i) => rpRecord(r, i + 1)).join('') : '<div class="rp-empty">ยังไม่มีรายการ</div>'}
         <div class="rp-sign"><div>ลงชื่อ ..................................................<br>( ${esc(name)} )<br>ผู้รายงาน</div><div>ลงชื่อ ..................................................<br>( .................................................. )<br>ผู้อำนวยการ</div></div>`;
@@ -902,7 +915,7 @@
     openReport({
       title: recs ? (profile ? 'ประวัติบุคลากรและการพัฒนาตนเอง' : 'รายงานการพัฒนาตนเอง') : 'ประวัติส่วนตัวบุคลากร',
       subtitle: name + (year ? ` · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : ''), build, recs: recs || [],
-      filename: [recs ? (profile ? 'ประวัติและการพัฒนาตนเอง' : 'การพัฒนาตนเอง') : 'ประวัติส่วนตัว', u.firstName, u.lastName, year].filter(Boolean).join(' ')
+      filename: [recs ? (profile ? 'ประวัติและการพัฒนาตนเอง' : 'การพัฒนาตนเอง') : 'ประวัติส่วนตัว', u.firstName, u.lastName, year, project ? project.slice(0, 40) : ''].filter(Boolean).join(' ')
     });
   }
 
