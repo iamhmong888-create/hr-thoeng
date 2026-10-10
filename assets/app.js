@@ -209,11 +209,57 @@
     S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
     S.tab = store.get('hr_tab_' + S.role) || (S.role === 'admin' ? 'overview' : 'profile');
+    S.pending = 0;
     render();
+    startPendingWatch();
+  }
+
+  // ฟังการเปลี่ยนแปลงจากฐานข้อมูล: ครูส่งรายการใหม่ ตัวเลขเพิ่มทันที / ตรวจแล้ว ตัวเลขลดทันที
+  let stopWatch = null;
+  function stopPendingWatch() { if (stopWatch) { stopWatch(); stopWatch = null; } }
+  async function startPendingWatch() {
+    stopPendingWatch();
+    if (S.role !== 'admin') return;
+    const be = await backend();
+    if (!be.watchPending) return refreshPending();
+    let first = true;
+    stopWatch = be.watchPending(n => {
+      const prev = S.pending;
+      S.pending = n; paintBadge();
+      if (!first && n > prev) toast(`มีรายการใหม่รอตรวจ (รวม ${n} รายการ)`);
+      if (!first) scheduleLiveRefresh();
+      first = false;
+    });
+  }
+  // ถ้าเปิดหน้า "รายการพัฒนาตนเอง" อยู่ ให้รายการในหน้าอัปเดตเองเมื่อข้อมูลเปลี่ยน
+  let liveT = null;
+  function scheduleLiveRefresh() {
+    clearTimeout(liveT);
+    liveT = setTimeout(() => { if (S.tab === 'records' && typeof S.recLive === 'function') S.recLive(); }, 400);
+  }
+
+  /* ตัวเลขแจ้งเตือนบนเมนู "รายการพัฒนาตนเอง": จำนวนรายการที่รอผู้บริหารตรวจ (ทุกปีงบประมาณ ไม่นับรายการของตนเอง) */
+  async function refreshPending() {
+    if (S.role !== 'admin' || stopWatch) return; // ถ้าติดตามแบบเรียลไทม์อยู่แล้ว ไม่ต้องโหลดซ้ำ
+    try {
+      const all = await api('listRecords', {});
+      S.pending = all.filter(r => !r.review && r.staffId !== S.user.id).length;
+    } catch (e) { return; }
+    paintBadge();
+  }
+  function paintBadge() {
+    const t = $('.tab[data-tab=records]'); if (!t) return;
+    let b = $('.tab-badge', t);
+    if (!S.pending) { if (b) b.remove(); t.removeAttribute('title'); return; }
+    if (!b) { b = document.createElement('span'); b.className = 'tab-badge'; t.appendChild(b); }
+    b.textContent = S.pending > 99 ? '99+' : String(S.pending);
+    t.title = `รอตรวจ ${S.pending} รายการ`;
+    b.setAttribute('aria-label', `รอตรวจ ${S.pending} รายการ`);
   }
 
   async function logout(silent) {
     const wasIn = !!S.user;
+    stopPendingWatch();
     if (!silent && S.token) { try { await busy(() => api('logout')); } catch (e) { } }
     S.token = null; S.user = null; S.role = null; store.set('hr_token', null);
     renderLogin(silent && wasIn ? 'หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่' : '');
@@ -239,6 +285,7 @@
     <nav class="tabs" aria-label="เมนู"><div class="tabs-in">${tabs.map(([k, l]) => `<button class="tab ${k === S.tab ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div></nav></div>
     <main id="view"></main>`;
     $('#btn-logout').onclick = () => logout();
+    paintBadge();
     $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; store.set('hr_tab_' + S.role, S.tab); render(); });
     const v = $('#view');
     const views = { profile: viewProfile, dev: viewDev, password: viewPassword, overview: viewOverview, staff: viewStaff, records: viewRecords, settings: viewSettings };
@@ -356,9 +403,9 @@
     const mode = opts.mode || 'own';
     const ph = ['photo1', 'photo2'].map((k, i) => r[k] ? `<img class="thumb" loading="lazy" src="${esc(photoUrl(r[k]) || BLANK)}" data-full="${esc(photoUrl(r[k]))}" ${/^fs:/.test(r[k]) ? `data-fs="${esc(r[k])}"` : ''} alt="รูปหลักฐาน ${i + 1}: ${esc(r.title)}">` : `<div class="thumb none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
     const long = (r.knowledge || '').length > 260;
-    return `<article class="rec st-${esc(r.review || 'pending')}" data-id="${esc(r.id)}" data-who="${esc(opts.who || '')}">
+    return `<article class="rec st-${esc(r.review || 'pending')}${opts.isNew ? ' rec-new' : ''}" data-id="${esc(r.id)}" data-who="${esc(opts.who || '')}">
       <div class="body">
-        <div class="meta">${reviewChip(r)}<span class="chip ink">${esc(r.type || 'พัฒนาตนเอง')}</span><span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
+        <div class="meta">${opts.isNew ? '<span class="chip new">ใหม่</span>' : ''}${reviewChip(r)}<span class="chip ink">${esc(r.type || 'พัฒนาตนเอง')}</span><span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
         <h3>${esc(r.title)}</h3>
         ${opts.who ? `<div class="small"><b>${esc(opts.who)}</b></div>` : ''}
         <div class="meta"><span><b class="lbl">โครงการ:</b> ${esc(r.projectName || '—')}</span>${r.place ? `<span><b class="lbl">สถานที่:</b> ${esc(r.place)}</span>` : ''}${r.organizer ? `<span><b class="lbl">จัดโดย:</b> ${esc(r.organizer)}</span>` : ''}</div>
@@ -385,6 +432,7 @@
       if (status === 'revise' && !note) return toast('กรุณาเขียนสิ่งที่ต้องแก้ไข เพื่อให้ครูทราบ', true);
       try {
         await busy(() => api('reviewRecord', { id: r.id, status, note }));
+        refreshPending();
         m.close(); toast(status === 'approved' ? 'บันทึกผล: ตรวจแล้ว' : status === 'revise' ? 'ส่งกลับให้แก้ไขแล้ว' : 'ยกเลิกผลตรวจแล้ว'); reload && reload();
       } catch (e) { }
     };
@@ -696,13 +744,25 @@
       const y = $('#rc-fy').value;
       $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map(p => `<option value="${esc(p.id)}">${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">อื่น ๆ (นอกโครงการ)</option>`;
     };
-    let all = [];
-    const load = async () => { try { all = await busy(() => api('listRecords', { year: $('#rc-fy').value })); } catch (e) { all = []; } if (v.isConnected) draw(); };
+    let all = [], known = null;
+    // silent = โหลดเบื้องหลังจากการแจ้งเตือนเรียลไทม์ (ไม่ขึ้นหน้าจอโหลด และคงตัวกรอง/ตำแหน่งเลื่อนไว้)
+    const load = async silent => {
+      try {
+        const res = await (silent ? api('listRecords', { year: $('#rc-fy').value }) : busy(() => api('listRecords', { year: $('#rc-fy').value })));
+        if (silent && known) res.forEach(r => { if (!known.has(r.id)) r._new = true; });
+        known = new Set(res.map(r => r.id));
+        all = res;
+      } catch (e) { if (silent) return; all = []; }
+      if (!v.isConnected) return;
+      const y = window.scrollY; draw(); if (silent) window.scrollTo(0, y);
+      refreshPending();
+    };
+    S.recLive = () => { if (v.isConnected) load(true); };
     const filtered = () => all.filter(r => (!$('#rc-proj').value || r.projectId === $('#rc-proj').value) && (!$('#rc-staff').value || r.staffId === $('#rc-staff').value) && (!$('#rc-type').value || r.type === $('#rc-type').value) && ($('#rc-rv').value === 'all' || (r.review || '') === $('#rc-rv').value));
     const draw = () => {
       const list = filtered();
       $('#rc-count').textContent = `${list.length} รายการ · ${sumHours(list)} ชั่วโมง · รอตรวจ ${list.filter(r => !r.review).length} รายการ`;
-      $('#rc-body').innerHTML = list.length ? `<div class="recs">${list.map(r => recCard(r, { who: name(r.staffId), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>` : `<div class="empty-state">ไม่พบรายการตามเงื่อนไขที่เลือก</div>`;
+      $('#rc-body').innerHTML = list.length ? `<div class="recs">${list.map(r => recCard(r, { who: name(r.staffId), mode: r.staffId === S.user.id ? 'view' : 'review', isNew: r._new })).join('')}</div>` : `<div class="empty-state">ไม่พบรายการตามเงื่อนไขที่เลือก</div>`;
       bindRecList($('#rc-body'), list, load);
     };
     $('#rc-fy').onchange = () => { fillProj(); load(); };
