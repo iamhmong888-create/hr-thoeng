@@ -134,7 +134,7 @@
   }
   document.addEventListener('click', e => {
     const t = e.target.closest('img.thumb[data-full]');
-    if (t) lightbox(t.dataset.full, t.alt);
+    if (t && t.dataset.full) lightbox(t.dataset.full, t.alt);
   });
 
   /* ---------------- auth ---------------- */
@@ -391,20 +391,39 @@
     const cl = $('#rv-clear', m.el); if (cl) cl.onclick = () => send('');
   }
 
-  async function loadPhotos(recs) {
-    const need = [...new Set(recs.filter(r => [r.photo1, r.photo2].some(p => /^fs:/.test(p || '') && !PHOTO[p])).map(r => r.id))];
-    await Promise.all(need.map(async id => {
-      try { const d = await api('getPhotos', { id }); PHOTO[`fs:${id}:1`] = d.p1; PHOTO[`fs:${id}:2`] = d.p2; } catch (e) { }
-    }));
+  // โหลดรูปหลักฐานทีละรายการ (ไม่โหลดซ้ำ)
+  const photoReq = new Map();
+  function fetchPhotos(id) {
+    if (!photoReq.has(id)) {
+      photoReq.set(id, api('getPhotos', { id }).then(d => { PHOTO[`fs:${id}:1`] = d.p1; PHOTO[`fs:${id}:2`] = d.p2; })
+        .catch(() => { photoReq.delete(id); }));
+    }
+    return photoReq.get(id);
   }
-  async function hydratePhotos(root, list) {
-    if (!$$('img[data-fs]', root).length) return;
-    await loadPhotos(list);
-    $$('img[data-fs]', root).forEach(img => { const u = PHOTO[img.dataset.fs]; if (u) { img.src = u; img.dataset.full = u; img.removeAttribute('data-fs'); } });
+  async function loadPhotos(recs) {
+    const ids = [...new Set(recs.filter(r => [r.photo1, r.photo2].some(p => /^fs:/.test(p || '') && !PHOTO[p])).map(r => r.id))];
+    for (let i = 0; i < ids.length; i += 4) await Promise.all(ids.slice(i, i + 4).map(fetchPhotos)); // ทีละ 4 รายการ
+  }
+  const showPhoto = img => { const u = PHOTO[img.dataset.fs]; if (u) { img.src = u; img.dataset.full = u; img.removeAttribute('data-fs'); return true; } return false; };
+  // โหลดรูปเฉพาะการ์ดที่กำลังจะเลื่อนมาถึง (ประหยัดเน็ตและเร็วขึ้นบนมือถือ)
+  const photoIO = 'IntersectionObserver' in window ? new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const img = e.target; photoIO.unobserve(img);
+      const key = img.dataset.fs; if (!key) return;
+      fetchPhotos(key.split(':')[1]).then(() => { if (img.isConnected) showPhoto(img); });
+    });
+  }, { rootMargin: '500px 0px' }) : null;
+  function hydratePhotos(root) {
+    $$('img[data-fs]', root).forEach(img => {
+      if (showPhoto(img)) return;
+      if (photoIO) photoIO.observe(img);
+      else fetchPhotos(img.dataset.fs.split(':')[1]).then(() => showPhoto(img));
+    });
   }
 
   function bindRecList(root, list, reload, whoFn) {
-    hydratePhotos(root, list);
+    hydratePhotos(root);
     $$('.rec', root).forEach(el => {
       const r = list.find(x => x.id === el.dataset.id);
       const more = $('[data-more]', el); if (more) more.onclick = () => { $('.know', el).classList.toggle('clamp'); more.textContent = $('.know', el).classList.contains('clamp') ? 'อ่านทั้งหมด' : 'ย่อ'; };
@@ -737,7 +756,7 @@
     if (!tb || tb.rows.length < 2) return null;
     const rest = t.cloneNode(false);
     if (t.tHead) rest.appendChild(t.tHead.cloneNode(true));
-    const rb = document.createElement('tbody'); rest.appendChild(rb);
+    const rb = t.ownerDocument.createElement('tbody'); rest.appendChild(rb);
     t.after(rest);
     while (t.getBoundingClientRect().height > room && tb.rows.length > 1) rb.insertBefore(tb.rows[tb.rows.length - 1], rb.firstChild);
     if (t.getBoundingClientRect().height > room || !rb.rows.length) {
@@ -749,27 +768,43 @@
 
   const safeName = s => String(s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, '_').slice(0, 80);
 
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+  const isPhone = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 700;
+
   async function openReport({ title, subtitle = '', build, recs = [], landscape = false, filename = '' }) {
     const ov = pdfOverlay('กำลังเตรียมข้อมูล…');
-    let root = null; const sx = window.scrollX, sy = window.scrollY;
+    let ifr = null;
     try {
       await Promise.all([loadPdfLibs(), loadPhotos(recs).catch(() => { })]);
-      if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) { } }
       // หน่วยพิกเซลที่ 96 dpi: A4 = 794 × 1123
       const PW = landscape ? 1123 : 794, PH = landscape ? 794 : 1123, M = 38, CW = PW - M * 2, CH = PH - M * 2 - 14;
-      window.scrollTo(0, 0);
-      root = document.createElement('div');
-      root.className = 'rp-root';
-      root.style.cssText = `position:absolute;left:0;top:0;width:${CW}px;z-index:-1;`;
-      root.innerHTML = `<style>${PDF_CSS}</style><header><div class="org">${esc(CFG.ORG_NAME)}</div><h1>${esc(title)}</h1>${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}</header>${build()}<footer>พิมพ์จาก${esc(CFG.APP_TITLE)} เมื่อวันที่ ${thToday()}</footer>`;
-      document.body.appendChild(root);
-      const blocks = [...root.children].filter(e => e.tagName !== 'STYLE');
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4', compress: true });
-      const k = 0.75; // px → pt
+      // สร้างรายงานในหน้าแยกขนาดเล็ก (ไม่มีรูป/เนื้อหาของหน้าเว็บหลัก) เพื่อให้มือถือประมวลผลเร็ว
+      ifr = document.createElement('iframe');
+      ifr.setAttribute('aria-hidden', 'true');
+      ifr.style.cssText = `position:fixed;left:-${PW * 3}px;top:0;width:${PW}px;height:${PH}px;border:0;`;
+      document.body.appendChild(ifr);
+      const idoc = ifr.contentDocument, iwin = ifr.contentWindow;
+      idoc.open();
+      idoc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap">
+        <style>html,body{margin:0;background:#fff}${PDF_CSS}.rp-page{display:flow-root;background:#fff}</style></head>
+        <body><div class="rp-root" style="width:${CW}px"><header><div class="org">${esc(CFG.ORG_NAME)}</div><h1>${esc(title)}</h1>${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}</header>${build()}<footer>พิมพ์จาก${esc(CFG.APP_TITLE)} เมื่อวันที่ ${thToday()}</footer></div></body></html>`);
+      idoc.close();
+      // โหลดตัวแปลงภาพเข้าไปในหน้าแยก (ใช้ไฟล์ที่โหลดไว้แล้ว)
+      await withTimeout(new Promise((res, rej) => {
+        const sc = idoc.createElement('script'); sc.src = PDF_LIBS[0]; sc.onload = res; sc.onerror = () => rej(new Error('โหลดตัวสร้าง PDF ไม่ได้'));
+        idoc.head.appendChild(sc);
+      }), 30000, 'โหลดตัวสร้าง PDF ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต');
+      if (idoc.fonts && idoc.fonts.ready) await Promise.race([idoc.fonts.ready, sleep(4000)]);
+      await sleep(50);
+
+      // 1) จัดหน้า: วัดความสูงแต่ละส่วน แล้วกำหนดว่าอยู่หน้าไหน (ตัดตารางยาวให้พอดีหน้า)
+      const root = idoc.querySelector('.rp-root');
+      const blocks = [...root.children];
+      const pages = [[]];
       let y = 0, prevBottom = null;
       for (let i = 0; i < blocks.length; i++) {
-        ov.set(`กำลังสร้างไฟล์ PDF… ${Math.round((i / blocks.length) * 100)}%`);
         const el = blocks[i];
         let r = el.getBoundingClientRect();
         const gap = prevBottom == null ? 0 : Math.max(0, r.top - prevBottom);
@@ -782,24 +817,47 @@
         if (y > 0) fitTable(CH - y - gap);
         let need = r.height;
         if (el.tagName === 'H2' && blocks[i + 1]) need += Math.min(blocks[i + 1].tagName === 'TABLE' ? 90 : blocks[i + 1].getBoundingClientRect().height, CH * 0.35);
-        if (y > 0 && y + gap + Math.min(need, CH) > CH) { pdf.addPage(); y = 0; fitTable(CH); } else if (y > 0) y += gap;
+        if (y > 0 && y + gap + Math.min(need, CH) > CH) { pages.push([]); y = 0; fitTable(CH); }
+        else if (y > 0) y += gap;
         else fitTable(CH);
+        pages[pages.length - 1].push(el);
+        y += r.height;
         prevBottom = r.bottom;
-        const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true });
-        const ratio = canvas.width / r.width;
-        let done = 0;
-        while (done < r.height - 0.5) {
-          const take = Math.min(r.height - done, CH - y);
-          const part = document.createElement('canvas');
-          part.width = canvas.width; part.height = Math.max(1, Math.round(take * ratio));
-          part.getContext('2d').drawImage(canvas, 0, Math.round(done * ratio), canvas.width, part.height, 0, 0, canvas.width, part.height);
-          pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M * k, (M + y) * k, r.width * k, take * k);
-          done += take; y += take;
-          if (done < r.height - 0.5) { pdf.addPage(); y = 0; }
-        }
+        if (y > CH) { pages.push([]); y = 0; prevBottom = null; } // ส่วนที่ยาวเกินหนึ่งหน้า: ตัดภาพภายหลัง
       }
-      const n = pdf.getNumberOfPages();
-      for (let pg = 1; pg <= n; pg++) { pdf.setPage(pg); pdf.setFontSize(9); pdf.setTextColor(130); pdf.text(`${pg} / ${n}`, (PW - M) * k, (PH - M / 2) * k, { align: 'right' }); }
+      const pageEls = pages.filter(g => g.length).map(g => {
+        const d = idoc.createElement('div'); d.className = 'rp-page'; d.style.width = CW + 'px';
+        g.forEach(el => d.appendChild(el)); return d;
+      });
+      root.innerHTML = '';
+      pageEls.forEach(d => root.appendChild(d));
+
+      // 2) แปลงทีละหน้าเป็นภาพ แล้วใส่ลง PDF
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4', compress: true });
+      const k = 0.75, scale = isPhone() ? 1.5 : 2;
+      let first = true;
+      for (let n = 0; n < pageEls.length; n++) {
+        ov.set(`กำลังสร้างไฟล์ PDF… หน้า ${n + 1} จาก ${pageEls.length}`);
+        await sleep(30); // ให้หน้าจออัปเดตข้อความ
+        const el = pageEls[n];
+        const canvas = await withTimeout(iwin.html2canvas(el, { scale, backgroundColor: '#ffffff', logging: false, useCORS: true, imageTimeout: 15000 }),
+          90000, 'สร้าง PDF ใช้เวลานานเกินไป กรุณาลองใหม่ หรือเปิดเว็บใน Safari/Chrome แทนแอป LINE');
+        const ratio = canvas.width / CW, totalH = canvas.height / ratio;
+        for (let done = 0; done < totalH - 1; done += CH) {
+          const take = Math.min(CH, totalH - done);
+          let img = canvas;
+          if (totalH > CH + 1) {
+            img = document.createElement('canvas'); img.width = canvas.width; img.height = Math.max(1, Math.round(take * ratio));
+            img.getContext('2d').drawImage(canvas, 0, Math.round(done * ratio), canvas.width, img.height, 0, 0, canvas.width, img.height);
+          }
+          if (!first) pdf.addPage(); first = false;
+          pdf.addImage(img.toDataURL('image/jpeg', 0.9), 'JPEG', M * k, M * k, CW * k, take * k);
+        }
+        canvas.width = canvas.height = 0; // คืนหน่วยความจำ
+      }
+      const total = pdf.getNumberOfPages();
+      for (let pg = 1; pg <= total; pg++) { pdf.setPage(pg); pdf.setFontSize(9); pdf.setTextColor(130); pdf.text(`${pg} / ${total}`, (PW - M) * k, (PH - M / 2) * k, { align: 'right' }); }
       const fname = safeName(filename || [title, subtitle].filter(Boolean).join(' ')) + '.pdf';
       ov.set('กำลังบันทึกไฟล์…');
       pdf.save(fname);
@@ -807,8 +865,7 @@
     } catch (e) {
       toast(e && e.message ? e.message : 'สร้างไฟล์ PDF ไม่สำเร็จ', true);
     } finally {
-      if (root) root.remove();
-      window.scrollTo(sx, sy);
+      if (ifr) ifr.remove();
       ov.close();
     }
   }
