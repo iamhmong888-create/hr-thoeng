@@ -205,7 +205,7 @@
   }
 
   async function enter(d) {
-    S.role = d.role; S.user = d.user; S.cache = {};
+    S.role = d.role; S.user = d.user; S.cache = {}; S.authUid = d.uid || null;
     S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
     S.tab = store.get('hr_tab_' + S.role) || (S.role === 'admin' ? 'overview' : 'profile');
@@ -216,11 +216,25 @@
 
   // ฟังการเปลี่ยนแปลงจากฐานข้อมูล: ครูส่งรายการใหม่ ตัวเลขเพิ่มทันที / ตรวจแล้ว ตัวเลขลดทันที
   let stopWatch = null;
-  function stopPendingWatch() { if (stopWatch) { stopWatch(); stopWatch = null; } }
+  function stopPendingWatch() {
+    if (stopWatch) { stopWatch(); stopWatch = null; }
+    if (userWatch) { userWatch(); userWatch = null; }
+    clearInterval(pollT); pollT = null; liveOk = false;
+  }
+  let liveOk = false, pollT = null, userWatch = null;
   async function startPendingWatch() {
     stopPendingWatch();
-    if (S.role !== 'admin') return;
     const be = await backend();
+    // บัญชีในเบราว์เซอร์นี้ถูกเปลี่ยนจากแท็บอื่น → โหลดหน้าใหม่ให้ตรงกับบัญชีปัจจุบัน
+    if (be.onUserChange && S.authUid) {
+      const myUid = S.authUid;
+      userWatch = be.onUserChange(uid => {
+        if (!S.user || uid === myUid) return;
+        stopPendingWatch();
+        modal({ title: 'บัญชีผู้ใช้เปลี่ยน', size: 'sm', body: '<p style="margin:0">มีการเข้าสู่ระบบหรือออกจากระบบด้วยบัญชีอื่นในแท็บอื่นของเบราว์เซอร์นี้ หน้านี้จะโหลดใหม่ตามบัญชีปัจจุบัน<br><br><span class="small muted">ถ้าต้องการใช้ 2 บัญชีพร้อมกัน ให้ใช้คนละเบราว์เซอร์ หรือหน้าต่างไม่ระบุตัวตน (Incognito)</span></p>', foot: '<button class="btn primary" onclick="location.reload()">ตกลง</button>' });
+      });
+    }
+    if (S.role !== 'admin') return;
     if (!be.watchPending) return refreshPending();
     let first = true;
     stopWatch = be.watchPending(n => {
@@ -229,8 +243,22 @@
       if (!first && n > prev) toast(`มีรายการใหม่รอตรวจ (รวม ${n} รายการ)`);
       if (!first) scheduleLiveRefresh();
       first = false;
-    });
+    }, ok => { liveOk = ok; });
+    // สำรอง: ถ้าการเชื่อมต่อเรียลไทม์ใช้ไม่ได้ ตรวจข้อมูลใหม่ทุก 1 นาที (เฉพาะตอนเปิดหน้านี้อยู่)
+    pollT = setInterval(() => { if (!liveOk && document.visibilityState === 'visible') liveCatchUp(); }, 60000);
   }
+  // ดึงข้อมูลล่าสุดหนึ่งครั้ง (ใช้ตอนกลับมาที่แท็บ หรือเมื่อการเชื่อมต่อเรียลไทม์ใช้ไม่ได้)
+  async function liveCatchUp() {
+    if (S.role !== 'admin') return;
+    try {
+      const all = await api('listRecords', {});
+      const n = all.filter(r => !r.review && r.staffId !== S.user.id).length;
+      if (n > S.pending) toast(`มีรายการใหม่รอตรวจ (รวม ${n} รายการ)`);
+      S.pending = n; paintBadge();
+    } catch (e) { return; }
+    scheduleLiveRefresh();
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.user) liveCatchUp(); });
   // ถ้าเปิดหน้า "รายการพัฒนาตนเอง" อยู่ ให้รายการในหน้าอัปเดตเองเมื่อข้อมูลเปลี่ยน
   let liveT = null;
   function scheduleLiveRefresh() {
@@ -516,7 +544,7 @@
         <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">+ เพิ่มรายการพัฒนาตนเอง</button></div></div>
       <div class="toolbar no-print"><label class="field" style="flex:1 1 320px"><span>แสดงเฉพาะโครงการ</span><select id="dev-proj">
         <option value="">ทุกโครงการ (${list.length} รายการ)</option>
-        ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map(p => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
+        ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map((p, i) => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${p.id === 'OTHER' ? '' : (i + 1) + '. '}${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
       </select></label></div>
       ${list.some(r => r.review === 'revise') ? `<div class="notice revise-alert"><div class="grow"><b>มี ${list.filter(r => r.review === 'revise').length} รายการที่ผู้บริหารส่งกลับให้แก้ไข</b> อ่านความเห็นในรายการ แล้วกด “แก้ไข” เพื่อปรับปรุง เมื่อบันทึกแล้วสถานะจะกลับเป็น “รอตรวจ”</div></div>` : ''}
       <div class="recs">${shown.length ? shown.map(r => recCard(r, { mode: 'own' })).join('') : list.length ? '<div class="empty-state">ยังไม่มีรายการในโครงการนี้</div>' : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง</div>`}</div>`;
@@ -549,7 +577,7 @@
     const today = new Date(); const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const photos = [r.photo1 ? 'keep' : null, r.photo2 ? 'keep' : null];
     const previews = [photoUrl(r.photo1), photoUrl(r.photo2)];
-    const projOpts = y => S.meta.projects.filter(p => p.year === y).map(p => `<option value="${esc(p.id)}" ${p.id === r.projectId ? 'selected' : ''}>${esc(p.name)}</option>`).join('')
+    const projOpts = y => S.meta.projects.filter(p => p.year === y).map((p, i) => `<option value="${esc(p.id)}" ${p.id === r.projectId ? 'selected' : ''}>${i + 1}. ${esc(p.name)}</option>`).join('')
       + `<option value="OTHER" ${r.projectId === 'OTHER' ? 'selected' : ''}>อื่น ๆ (นอกโครงการ / พัฒนาตนเอง)</option>`;
     const m = modal({
       title: isNew ? 'เพิ่มรายการพัฒนาตนเอง' : 'แก้ไขรายการพัฒนาตนเอง',
@@ -733,7 +761,7 @@
       <div class="toolbar">
         <label class="field"><span>ปีงบประมาณ</span>${yearSelect('rc-fy', S.fy, true)}</label>
         <label class="field"><span>โครงการ</span><select id="rc-proj"></select></label>
-        <label class="field"><span>บุคลากร</span><select id="rc-staff"><option value="">ทุกคน</option>${staff.map(s => `<option value="${esc(s.id)}">${esc(fullName(s))}</option>`).join('')}</select></label>
+        <label class="field"><span>บุคลากร</span><select id="rc-staff"><option value="">ทุกคน</option>${staff.map((s, i) => `<option value="${esc(s.id)}">${i + 1}. ${esc(fullName(s))}</option>`).join('')}</select></label>
         <label class="field"><span>ประเภท</span><select id="rc-type"><option value="">ทุกประเภท</option>${DEV_TYPES.map(t => `<option>${t}</option>`).join('')}</select></label>
         <label class="field"><span>สถานะการตรวจ</span><select id="rc-rv"><option value="all">ทุกสถานะ</option><option value="">รอตรวจ</option><option value="approved">ตรวจแล้ว</option><option value="revise">ส่งกลับแก้ไข</option></select></label>
       </div><div id="rc-body" class="stack"></div>`;
@@ -742,7 +770,7 @@
     if (preset) $('#rc-fy').value = preset.fy;
     const fillProj = () => {
       const y = $('#rc-fy').value;
-      $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map(p => `<option value="${esc(p.id)}">${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">อื่น ๆ (นอกโครงการ)</option>`;
+      $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map((p, i) => `<option value="${esc(p.id)}">${i + 1}. ${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">อื่น ๆ (นอกโครงการ)</option>`;
     };
     let all = [], known = null;
     // silent = โหลดเบื้องหลังจากการแจ้งเตือนเรียลไทม์ (ไม่ขึ้นหน้าจอโหลด และคงตัวกรอง/ตำแหน่งเลื่อนไว้)

@@ -8,7 +8,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
   initializeFirestore, memoryLocalCache, doc, getDoc, getDocs, setDoc, updateDoc,
-  collection, query, where, limit, writeBatch
+  collection, query, where, limit, writeBatch, onSnapshot
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const STAFF_FIELDS = ['id', 'prefix', 'firstName', 'lastName', 'position', 'citizenId', 'address', 'phone',
@@ -173,7 +173,8 @@ export function create(CFG) {
       b.set(D('config', 'setup'), { createdAt: nowISO(), adminEmail: email });
       await b.commit();
       ctx = null;
-      return meResult(await me());
+      const c = await me();
+      return Object.assign({ uid: c.uid, meta: await getMeta() }, await meResult(c));
     },
 
     async login(q) {
@@ -191,7 +192,7 @@ export function create(CFG) {
       ctx = null;
       const c = await me();
       const [r, meta] = await Promise.all([meResult(c), getMeta()]);
-      return Object.assign({ token: 'firebase', meta }, r);
+      return Object.assign({ token: 'firebase', meta, uid: c.uid }, r);
     },
 
     async forgotPassword(q) {
@@ -203,7 +204,7 @@ export function create(CFG) {
     },
 
     async logout() { ctx = null; await signOut(auth); return true; },
-    async me() { const c = await me(); const [r, meta] = await Promise.all([meResult(c), getMeta()]); return Object.assign({ meta }, r); },
+    async me() { const c = await me(); const [r, meta] = await Promise.all([meResult(c), getMeta()]); return Object.assign({ meta, uid: c.uid }, r); },
     async meta() { await me(); return getMeta(); },
 
     async changePassword(q) {
@@ -498,6 +499,27 @@ export function create(CFG) {
   };
 
   return {
+    // ติดตามจำนวนรายการรอตรวจแบบเรียลไทม์ (เฉพาะผู้บริหาร) คืนค่าฟังก์ชันสำหรับหยุดติดตาม
+    // cb(จำนวนรอตรวจ) ทุกครั้งที่ข้อมูลเปลี่ยน · onState(true/false) = การเชื่อมต่อเรียลไทม์ใช้งานได้หรือไม่
+    // ถ้าการเชื่อมต่อหลุด (เน็ตหลุด/เครือข่ายบล็อก) จะลองเชื่อมใหม่อัตโนมัติ
+    watchPending(cb, onState = () => { }) {
+      let unsub = null, stopped = false, retryT = null, wait = 3000;
+      const start = () => me().then(c => {
+        if (stopped || c.role !== 'admin') return;
+        unsub = onSnapshot(C('records'), snap => {
+          wait = 3000; onState(true);
+          cb(snap.docs.filter(d => { const r = d.data(); return !r.review && r.staffId !== c.staffId; }).length);
+        }, () => {
+          onState(false);
+          if (unsub) { unsub(); unsub = null; }
+          if (!stopped) { retryT = setTimeout(start, wait); wait = Math.min(wait * 2, 60000); }
+        });
+      }).catch(() => { onState(false); if (!stopped) retryT = setTimeout(start, 10000); });
+      start();
+      return () => { stopped = true; clearTimeout(retryT); if (unsub) unsub(); };
+    },
+    // แจ้งเมื่อบัญชีที่เข้าระบบในเบราว์เซอร์นี้เปลี่ยน (เช่น เข้าระบบด้วยบัญชีอื่นในแท็บอื่น)
+    onUserChange(cb) { return onAuthStateChanged(auth, u => cb(u ? u.uid : null)); },
     async handle(q) {
       const fn = actions[q.action];
       if (!fn) return { ok: false, error: 'ไม่รู้จักคำสั่ง: ' + q.action };
