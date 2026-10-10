@@ -271,7 +271,7 @@
         <div><h1>${esc(fullName(u))}</h1><div class="muted">${esc([u.position, u.education && 'วุฒิ ' + u.education, u.major].filter(Boolean).join(' · ') || 'บุคลากร')}</div></div></div>
         <div class="actions no-print"><button class="btn" id="pdf-me">ดาวน์โหลด PDF</button><button class="btn primary" id="edit-me">แก้ไขข้อมูล</button></div></div>
       ${profileHTML(u)}
-      <p class="small muted">ช่อง ชื่อ นามสกุล ตำแหน่ง เลขประจำตัวประชาชน และเงินเดือน แก้ไขได้โดยผู้ดูแลระบบ หากข้อมูลไม่ถูกต้องกรุณาแจ้งงานบุคลากร</p>`;
+`;
     $('#pdf-me').onclick = () => reportPerson(u, null, { profile: true });
     $('#edit-me').onclick = () => editProfile(u, false, nu => { S.user = Object.assign(S.user, nu); render(); });
     const gp = $('#go-pw'); if (gp) gp.onclick = () => { S.tab = 'password'; render(); };
@@ -280,7 +280,7 @@
   function editProfile(u, asAdmin, onSaved) {
     const isNew = !u.id;
     const input = (k, l, o = {}) => {
-      const locked = o.lock && !asAdmin;
+      const locked = false; // ครูแก้ไขข้อมูลของตนเองได้ทุกช่อง (ยกเว้นสิทธิ์การใช้งาน ซึ่งแสดงเฉพาะผู้ดูแล)
       const val = esc(u[k] ?? '');
       let ctl;
       if (o.type === 'birth') {
@@ -290,7 +290,7 @@
       } else if (o.type === 'textarea') ctl = `<textarea id="pf-${k}" rows="2" ${locked ? 'disabled' : ''}>${val}</textarea>`;
       else if (o.type === 'role') ctl = `<select id="pf-${k}"><option value="">ครู/บุคลากร</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>ผู้บริหาร (เห็นข้อมูลทุกคน)</option></select>`;
       else ctl = `<input type="${o.type === 'tel' ? 'tel' : o.type === 'email' ? 'email' : 'text'}" id="pf-${k}" value="${val}" ${locked ? 'disabled' : ''}>`;
-      return `<label class="field ${o.wide ? 'wide' : ''}"><span>${l}${locked ? ' (แก้ไขโดยผู้ดูแล)' : ''}${k === 'firstName' && asAdmin ? ' <span class="req">* ใช้เป็นชื่อผู้ใช้</span>' : ''}</span>${ctl}</label>`;
+      return `<label class="field ${o.wide ? 'wide' : ''}"><span>${l}${locked ? ' (แก้ไขโดยผู้ดูแล)' : ''}${k === 'firstName' ? ' <span class="req">* ใช้เป็นชื่อผู้ใช้เข้าระบบ</span>' : ''}</span>${ctl}</label>`;
     };
     const groups = asAdmin ? GROUPS.concat([{ t: 'สิทธิ์', f: ADMIN_ONLY }]) : GROUPS;
     const m = modal({
@@ -304,7 +304,9 @@
         if (o.type === 'birth') { ['birthDay', 'birthMonth', 'birthYear'].forEach(b => data[b] = $('#pf-' + b, m.el).value); return; }
         const el = $('#pf-' + k, m.el); if (el && !el.disabled) data[k] = el.value;
       }));
-      if (asAdmin && !String(data.firstName || '').trim()) return toast('กรุณากรอกชื่อ', true);
+      if (!String(data.firstName || '').trim()) return toast('กรุณากรอกชื่อ', true);
+      if (!isNew && !asAdmin && String(data.firstName).replace(/\s+/g, '') !== String(u.firstName || '').replace(/\s+/g, '')
+        && !(await confirmBox(`ชื่อใช้เป็นชื่อผู้ใช้เข้าระบบ ถ้าเปลี่ยนเป็น “${String(data.firstName).trim()}” ครั้งต่อไปต้องเข้าระบบด้วยชื่อใหม่ (รหัสผ่านเดิม) ยืนยันหรือไม่?`, 'ยืนยันเปลี่ยนชื่อ', false))) return;
       try {
         const nu = await busy(() => api('updateProfile', { data }));
         m.close(); toast(nu && nu._warn ? nu._warn : 'บันทึกข้อมูลแล้ว', !!(nu && nu._warn)); S.cache = {}; onSaved && onSaved(nu);
@@ -1064,7 +1066,7 @@
     const meta = () => ({ years: db.years.slice().sort((a, b) => b - a), projects: db.projects.slice() });
     const digits = s => String(s || '').replace(/\D/g, '').replace(/^0+/, '');
     const me = ses => ses.id === 'ADMIN' ? { role: 'admin', user: { id: 'ADMIN', prefix: '', firstName: ses.name || 'ผู้ดูแลระบบ', lastName: ses.name ? '' : '(ทดลอง)', isAdminAccount: true, canChangePassword: true } } : { role: ses.role, user: pub(db.staff.find(s => s.id === ses.id)) };
-    const TEDIT = ['prefix', 'phone', 'email', 'address', 'birthDay', 'birthMonth', 'birthYear', 'education', 'major', 'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'insignia'];
+    const TEDIT = ['prefix', 'firstName', 'lastName', 'position', 'citizenId', 'phone', 'email', 'address', 'birthDay', 'birthMonth', 'birthYear', 'education', 'major', 'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'salary', 'insignia'];
     async function handle(q) {
       load(); await new Promise(r => setTimeout(r, 120));
       const ok = data => ({ ok: true, data }), err = e => ({ ok: false, error: e });

@@ -14,8 +14,8 @@ import {
 const STAFF_FIELDS = ['id', 'prefix', 'firstName', 'lastName', 'position', 'citizenId', 'address', 'phone',
   'birthDay', 'birthMonth', 'birthYear', 'email', 'education', 'major', 'scoutQual', 'scoutType', 'scoutPosition',
   'scoutFee', 'redCrossQual', 'redCrossDate', 'salary', 'insignia', 'role'];
-const TEACHER_EDITABLE = ['prefix', 'phone', 'email', 'address', 'birthDay', 'birthMonth', 'birthYear', 'education', 'major',
-  'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'insignia'];
+// ครูแก้ไขข้อมูลของตนเองได้ทุกช่อง ยกเว้นสิทธิ์การใช้งาน (role)
+const TEACHER_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id' && k !== 'role');
 const ADMIN_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id');
 const REC_FIELDS = ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'startDate', 'endDate', 'hours', 'knowledge'];
 const NO_EMAIL_DOMAIN = 'no-email.local';
@@ -226,9 +226,21 @@ export function create(CFG) {
       const isAdmin = c.role === 'admin';
       if (!isAdmin) {
         if (d.id && d.id !== c.staffId) throw new Error('ไม่มีสิทธิ์แก้ไขข้อมูลผู้อื่น');
+        const old = await getStaff(c.staffId);
         const up = { updatedAt: nowISO() };
         TEACHER_EDITABLE.forEach(k => { if (d[k] !== undefined) up[k] = String(d[k]).trim(); });
-        await updateDoc(D('staff', c.staffId), up);
+        const b = writeBatch(db);
+        // เปลี่ยนชื่อ = เปลี่ยนชื่อผู้ใช้เข้าระบบ: ย้ายชื่อเข้าระบบไปชื่อใหม่ด้วย
+        if (up.firstName !== undefined && nameKey(up.firstName) !== nameKey(old.firstName)) {
+          if (!up.firstName) throw new Error('กรุณากรอกชื่อ');
+          if (await findLogin(up.firstName)) throw new Error('มีชื่อนี้ในระบบแล้ว (ชื่อใช้เป็นชื่อผู้ใช้ ต้องไม่ซ้ำกับคนอื่น)');
+          if (old.uid && old.authEmail) {
+            b.set(D('logins', nameKey(up.firstName)), { email: old.authEmail });
+            b.delete(D('logins', nameKey(old.firstName)));
+          }
+        }
+        b.update(D('staff', c.staffId), up);
+        await b.commit();
         return pub(await getStaff(c.staffId));
       }
       if (!d.id) {
