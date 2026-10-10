@@ -683,56 +683,129 @@
     fillProj(); load();
   }
 
-  /* ---------------- PDF reports (หน้ารายงาน A4 → บันทึกเป็น PDF) ---------------- */
-  const REPORT_CSS = `
-    *{box-sizing:border-box} body{margin:0;font:15px/1.55 "Sarabun","Noto Sans Thai",Tahoma,sans-serif;color:#111;background:#e9ecf1}
-    .sheet{background:#fff;max-width:210mm;margin:0 auto 24px;padding:14mm 12mm;box-shadow:0 2px 12px rgba(0,0,0,.12)}
-    .land .sheet{max-width:297mm}
-    .bar{position:sticky;top:0;background:#1d3a63;color:#fff;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center;margin-bottom:16px;font-size:14px}
-    .bar button{font:inherit;font-weight:600;background:#c98a12;color:#1b1404;border:0;border-radius:8px;padding:8px 18px;cursor:pointer}
-    header{text-align:center;border-bottom:2px solid #1d3a63;padding-bottom:8px;margin-bottom:14px}
-    header .org{font-size:14px;color:#444} h1{font-size:20px;margin:2px 0;font-weight:700} .sub{font-size:14px;color:#333}
-    h2{font-size:16px;margin:16px 0 6px;padding-left:8px;border-left:4px solid #c98a12;break-after:avoid}
-    table{width:100%;border-collapse:collapse;font-size:13.5px} th,td{border:1px solid #9aa4b2;padding:4px 6px;vertical-align:top;text-align:left}
-    th{background:#eef2f7;font-weight:600} td.r,th.r{text-align:right} td.c,th.c{text-align:center} tr{break-inside:avoid}
-    table.kv td:first-child{width:34%;background:#f6f8fb;color:#333}
-    .rec{border:1px solid #9aa4b2;border-radius:6px;padding:8px 10px;margin:10px 0;break-inside:avoid}
-    .rec .t{font-weight:700;font-size:15px} .rec .m{font-size:13px;color:#333;margin:2px 0 6px}
-    .rec .k{font-size:12.5px;color:#555;margin-top:6px} .rec p{margin:2px 0 6px;white-space:pre-wrap}
-    .ph{display:flex;gap:8px} .ph img{width:calc(50% - 4px);height:60mm;object-fit:cover;border:1px solid #ccc;border-radius:4px}
-    .ph .none{width:calc(50% - 4px);height:20mm;border:1px dashed #bbb;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
-    .sum{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;margin:4px 0 10px}
-    .sign{display:flex;justify-content:space-around;gap:20px;margin-top:36px;text-align:center;break-inside:avoid;font-size:14px}
-    .sign div{line-height:2.1}
-    footer{margin-top:18px;font-size:11.5px;color:#666;text-align:right}
-    .empty{color:#666;text-align:center;padding:16px;border:1px dashed #bbb}
-    @media print{body{background:#fff}.bar{display:none}.sheet{box-shadow:none;margin:0;padding:0;max-width:none}}`;
+  /* ---------------- PDF reports: สร้างไฟล์ PDF ในเครื่องแล้วดาวน์โหลดทันที ---------------- */
+  const PDF_CSS = `
+    .rp-root{background:#fff;color:#111;font:15px/1.55 "Sarabun","Noto Sans Thai",Tahoma,sans-serif;text-align:left}
+    .rp-root *{box-sizing:border-box}
+    .rp-root header{text-align:center;border-bottom:2px solid #1d3a63;padding-bottom:8px;margin:0 0 14px}
+    .rp-root .org{font-size:14px;color:#444}
+    .rp-root h1{font:700 21px/1.4 "Sarabun",Tahoma,sans-serif;margin:2px 0;color:#111}
+    .rp-root .sub{font-size:14px;color:#333}
+    .rp-root h2{font:700 16px/1.4 "Sarabun",Tahoma,sans-serif;margin:16px 0 6px;padding-left:8px;border-left:4px solid #c98a12;color:#111}
+    .rp-root table{width:100%;border-collapse:collapse;font-size:13.5px;margin:0}
+    .rp-root table tr th,.rp-root table tr td{border:1px solid #9aa4b2;padding:4px 6px;vertical-align:top;text-align:left;color:#111;font-size:13.5px;white-space:normal}
+    .rp-root table tr th{background:#eef2f7;font-weight:700}
+    .rp-root table tr .r{text-align:right} .rp-root table tr .c{text-align:center}
+    .rp-root table.rp-kv tr td:first-child{width:34%;background:#f6f8fb;color:#333}
+    .rp-root .rp-rec{border:1px solid #9aa4b2;border-radius:6px;padding:8px 10px;margin:10px 0}
+    .rp-root .rp-t{font-weight:700;font-size:15px}
+    .rp-root .rp-m{font-size:13px;color:#333;margin:2px 0 6px}
+    .rp-root .rp-k{font-size:13px;font-weight:700;color:#222;margin-top:6px}
+    .rp-root .rp-p{margin:2px 0 6px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .rp-root .rp-ph{display:flex;gap:8px}
+    .rp-root .rp-img{flex:1;height:200px;border:1px solid #ccc;border-radius:4px;background:#f3f3f3 center/cover no-repeat}
+    .rp-root .rp-none{flex:1;height:60px;border:1px dashed #bbb;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#888;font-size:12px}
+    .rp-root .rp-sum{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;margin:4px 0 10px}
+    .rp-root .rp-sign{display:flex;justify-content:space-around;gap:20px;margin-top:36px;text-align:center;font-size:14px;line-height:2.1}
+    .rp-root footer{margin-top:18px;font-size:11.5px;color:#666;text-align:right}
+    .rp-root .rp-empty{color:#666;text-align:center;padding:16px;border:1px dashed #bbb}`;
 
   function thToday() { const d = new Date(); return `${d.getDate()} ${TH_M[d.getMonth()]} ${d.getFullYear() + 543}`; }
 
-  async function openReport({ title, subtitle = '', build, recs = [], landscape = false }) {
-    // เปิดหน้าต่างทันทีตอนกดปุ่ม (กันเบราว์เซอร์บล็อกป๊อปอัป) แล้วค่อยโหลดรูปและเขียนรายงาน
-    const w = window.open('', '_blank');
-    if (!w) { toast(IN_FRAME ? 'ปุ่ม PDF ใช้ได้เมื่อเปิดเว็บจาก GitHub Pages' : 'เบราว์เซอร์บล็อกหน้าต่างใหม่ กรุณากดอนุญาตป๊อปอัปสำหรับเว็บนี้แล้วลองอีกครั้ง', true); return; }
-    try { w.document.write('<p style="font-family:sans-serif;padding:2rem">กำลังสร้างรายงาน…</p>'); } catch (e) { }
-    try { await loadPhotos(recs); } catch (e) { }
-    const body = build();
-    w.document.open();
-    w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>${esc(title)}</title>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
-      <style>${REPORT_CSS}@page{size:A4 ${landscape ? 'landscape' : 'portrait'};margin:12mm}</style></head>
-      <body class="${landscape ? 'land' : ''}">
-      <div class="bar"><span>กดปุ่มนี้ แล้วเลือกปลายทาง <b>“บันทึกเป็น PDF” (Save as PDF)</b></span><button onclick="window.print()">บันทึกเป็น PDF</button></div>
-      <div class="sheet"><header><div class="org">${esc(CFG.ORG_NAME)}</div><h1>${esc(title)}</h1>${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}</header>
-      ${body}<footer>พิมพ์จาก${esc(CFG.APP_TITLE)} เมื่อวันที่ ${thToday()}</footer></div>
-      <script>window.addEventListener('load',function(){(document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(function(){setTimeout(function(){window.print()},500)})});<\/script>
-      </body></html>`);
-    w.document.close();
+  const PDF_LIBS = ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
+  let pdfLibsP = null;
+  function loadPdfLibs() {
+    if (window.html2canvas && window.jspdf) return Promise.resolve();
+    if (!pdfLibsP) pdfLibsP = Promise.all(PDF_LIBS.map(src => new Promise((res, rej) => {
+      const sc = document.createElement('script'); sc.src = src; sc.onload = res;
+      sc.onerror = () => { pdfLibsP = null; rej(new Error('โหลดตัวสร้าง PDF ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่')); };
+      document.head.appendChild(sc);
+    })));
+    return pdfLibsP;
+  }
+
+  function pdfOverlay(msg) {
+    const el = document.createElement('div'); el.className = 'loading pdf-busy';
+    el.innerHTML = `<div class="pdf-busy-box"><div class="spinner" role="status"></div><div class="pdf-busy-msg">${esc(msg)}</div></div>`;
+    document.body.appendChild(el);
+    return { set: t => { const m = $('.pdf-busy-msg', el); if (m) m.textContent = t; }, close: () => el.remove() };
+  }
+
+  // แบ่งตารางยาวเป็นหลายตาราง (มีหัวตารางทุกส่วน) เพื่อไม่ให้แถวถูกตัดกลางหน้า
+  function splitTables(root, maxH) {
+    [...root.children].filter(e => e.tagName === 'TABLE' && e.tBodies[0]).forEach(t => {
+      if (t.getBoundingClientRect().height <= maxH * 0.92) return;
+      const rows = [...t.tBodies[0].rows];
+      const mk = () => { const nt = t.cloneNode(false); if (t.tHead) nt.appendChild(t.tHead.cloneNode(true)); nt.appendChild(document.createElement('tbody')); t.parentNode.insertBefore(nt, t); return nt; };
+      let cur = mk();
+      rows.forEach(r => {
+        cur.tBodies[0].appendChild(r);
+        if (cur.getBoundingClientRect().height > maxH * 0.92 && cur.tBodies[0].rows.length > 1) { r.remove(); cur = mk(); cur.tBodies[0].appendChild(r); }
+      });
+      t.remove();
+    });
+  }
+
+  const safeName = s => String(s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, '_').slice(0, 80);
+
+  async function openReport({ title, subtitle = '', build, recs = [], landscape = false, filename = '' }) {
+    const ov = pdfOverlay('กำลังเตรียมข้อมูล…');
+    let root = null; const sx = window.scrollX, sy = window.scrollY;
+    try {
+      await Promise.all([loadPdfLibs(), loadPhotos(recs).catch(() => { })]);
+      if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) { } }
+      // หน่วยพิกเซลที่ 96 dpi: A4 = 794 × 1123
+      const PW = landscape ? 1123 : 794, PH = landscape ? 794 : 1123, M = 38, CW = PW - M * 2, CH = PH - M * 2 - 14;
+      window.scrollTo(0, 0);
+      root = document.createElement('div');
+      root.className = 'rp-root';
+      root.style.cssText = `position:absolute;left:0;top:0;width:${CW}px;z-index:-1;`;
+      root.innerHTML = `<style>${PDF_CSS}</style><header><div class="org">${esc(CFG.ORG_NAME)}</div><h1>${esc(title)}</h1>${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}</header>${build()}<footer>พิมพ์จาก${esc(CFG.APP_TITLE)} เมื่อวันที่ ${thToday()}</footer>`;
+      document.body.appendChild(root);
+      splitTables(root, CH);
+      const blocks = [...root.children].filter(e => e.tagName !== 'STYLE');
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4', compress: true });
+      const k = 0.75; // px → pt
+      let y = 0, prevBottom = null;
+      for (let i = 0; i < blocks.length; i++) {
+        ov.set(`กำลังสร้างไฟล์ PDF… ${Math.round((i / blocks.length) * 100)}%`);
+        const el = blocks[i], r = el.getBoundingClientRect();
+        const gap = prevBottom == null ? 0 : Math.max(0, r.top - prevBottom);
+        prevBottom = r.bottom;
+        let need = r.height;
+        if (el.tagName === 'H2' && blocks[i + 1]) need += Math.min(blocks[i + 1].getBoundingClientRect().height, CH * 0.35);
+        if (y > 0 && y + gap + Math.min(need, CH) > CH) { pdf.addPage(); y = 0; } else if (y > 0) y += gap;
+        const canvas = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false, useCORS: true });
+        const ratio = canvas.width / r.width;
+        let done = 0;
+        while (done < r.height - 0.5) {
+          const take = Math.min(r.height - done, CH - y);
+          const part = document.createElement('canvas');
+          part.width = canvas.width; part.height = Math.max(1, Math.round(take * ratio));
+          part.getContext('2d').drawImage(canvas, 0, Math.round(done * ratio), canvas.width, part.height, 0, 0, canvas.width, part.height);
+          pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M * k, (M + y) * k, r.width * k, take * k);
+          done += take; y += take;
+          if (done < r.height - 0.5) { pdf.addPage(); y = 0; }
+        }
+      }
+      const n = pdf.getNumberOfPages();
+      for (let pg = 1; pg <= n; pg++) { pdf.setPage(pg); pdf.setFontSize(9); pdf.setTextColor(130); pdf.text(`${pg} / ${n}`, (PW - M) * k, (PH - M / 2) * k, { align: 'right' }); }
+      const fname = safeName(filename || [title, subtitle].filter(Boolean).join(' ')) + '.pdf';
+      ov.set('กำลังบันทึกไฟล์…');
+      pdf.save(fname);
+      toast('ดาวน์โหลดไฟล์ PDF แล้ว: ' + fname);
+    } catch (e) {
+      toast(e && e.message ? e.message : 'สร้างไฟล์ PDF ไม่สำเร็จ', true);
+    } finally {
+      if (root) root.remove();
+      window.scrollTo(sx, sy);
+      ov.close();
+    }
   }
 
   function rpProfile(u) {
-    return GROUPS.map(g => `<h2>${g.t}</h2><table class="kv">${g.f.map(([k, l, o = {}]) => {
+    return GROUPS.map(g => `<h2>${g.t}</h2><table class="rp-kv">${g.f.map(([k, l, o = {}]) => {
       let v = k === 'birth' ? birthText(u) : u[k];
       if (o.type === 'money' && v) v = money(v);
       return `<tr><td>${l}</td><td>${esc(v || '-')}</td></tr>`;
@@ -740,29 +813,30 @@
   }
 
   function rpRecord(r, n, who) {
-    const ph = ['photo1', 'photo2'].map((k, i) => r[k] && photoUrl(r[k]) ? `<img src="${esc(photoUrl(r[k]))}" alt="รูปที่ ${i + 1}">` : `<div class="none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
-    return `<div class="rec"><div class="t">${n}. ${esc(r.title)}</div>
-      <div class="m">${who ? `<b>${esc(who)}</b> · ` : ''}${esc(r.type || '')} · ${esc(thRange(r.startDate, r.endDate))}${r.hours ? ` · ${esc(r.hours)} ชั่วโมง` : ''}</div>
-      <table class="kv"><tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>
+    const ph = ['photo1', 'photo2'].map((k, i) => r[k] && photoUrl(r[k]) ? `<div class="rp-img" style="background-image:url('${photoUrl(r[k]).replace(/'/g, '%27')}')"></div>` : `<div class="rp-none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
+    return `<div class="rp-rec"><div class="rp-t">${n}. ${esc(r.title)}</div>
+      <div class="rp-m">${who ? `<b>${esc(who)}</b> · ` : ''}${esc(r.type || '')} · ${esc(thRange(r.startDate, r.endDate))}${r.hours ? ` · ${esc(r.hours)} ชั่วโมง` : ''}</div>
+      <table class="rp-kv"><tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>
       <tr><td>สถานที่</td><td>${esc(r.place || '-')}</td></tr><tr><td>หน่วยงานผู้จัด</td><td>${esc(r.organizer || '-')}</td></tr>
       <tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>
-      <div class="k">ความรู้ที่ได้รับ / การนำไปใช้</div><p>${esc(r.knowledge || '-')}</p><div class="ph">${ph}</div></div>`;
+      <div class="rp-k">ความรู้ที่ได้รับ / การนำไปใช้</div><p class="rp-p">${esc(r.knowledge || '-')}</p><div class="rp-ph">${ph}</div></div>`;
   }
 
   function reportPerson(u, recs, { year, profile }) {
     const name = fullName(u);
-    const build = () => { let body = profile ? rpProfile(u) : `<table class="kv"><tr><td>ชื่อ-สกุล</td><td>${esc(name)}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(u.position || '-')}</td></tr><tr><td>วุฒิการศึกษา / วิชาเอก</td><td>${esc([u.education, u.major].filter(Boolean).join(' / ') || '-')}</td></tr></table>`;
+    const build = () => { let body = profile ? rpProfile(u) : `<table class="rp-kv"><tr><td>ชื่อ-สกุล</td><td>${esc(name)}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(u.position || '-')}</td></tr><tr><td>วุฒิการศึกษา / วิชาเอก</td><td>${esc([u.education, u.major].filter(Boolean).join(' / ') || '-')}</td></tr></table>`;
     if (recs) {
       const sorted = recs.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
-      body += `<h2>ประวัติการพัฒนาตนเอง${year ? ` ปีงบประมาณ พ.ศ. ${esc(year)}` : ''}</h2>
-        <div class="sum"><span>จำนวน <b>${sorted.length}</b> รายการ</span><span>รวม <b>${sumHours(sorted)}</b> ชั่วโมง</span><span>ศึกษาดูงาน <b>${sorted.filter(r => r.type === 'ศึกษาดูงาน').length}</b> ครั้ง</span></div>
-        ${sorted.length ? sorted.map((r, i) => rpRecord(r, i + 1)).join('') : '<div class="empty">ยังไม่มีรายการ</div>'}
-        <div class="sign"><div>ลงชื่อ ..................................................<br>( ${esc(name)} )<br>ผู้รายงาน</div><div>ลงชื่อ ..................................................<br>( .................................................. )<br>ผู้อำนวยการ</div></div>`;
+      body += `<h2>การพัฒนาตนเอง${year ? ` ปีงบประมาณ พ.ศ. ${esc(year)}` : ''}</h2>
+        <div class="rp-sum"><span>จำนวน <b>${sorted.length}</b> รายการ</span><span>รวม <b>${sumHours(sorted)}</b> ชั่วโมง</span><span>ศึกษาดูงาน <b>${sorted.filter(r => r.type === 'ศึกษาดูงาน').length}</b> ครั้ง</span></div>
+        ${sorted.length ? sorted.map((r, i) => rpRecord(r, i + 1)).join('') : '<div class="rp-empty">ยังไม่มีรายการ</div>'}
+        <div class="rp-sign"><div>ลงชื่อ ..................................................<br>( ${esc(name)} )<br>ผู้รายงาน</div><div>ลงชื่อ ..................................................<br>( .................................................. )<br>ผู้อำนวยการ</div></div>`;
     }
     return body; };
     openReport({
       title: recs ? (profile ? 'ประวัติบุคลากรและการพัฒนาตนเอง' : 'รายงานการพัฒนาตนเอง') : 'ประวัติส่วนตัวบุคลากร',
-      subtitle: name + (year ? ` · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : ''), build, recs: recs || []
+      subtitle: name + (year ? ` · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : ''), build, recs: recs || [],
+      filename: [recs ? (profile ? 'ประวัติและการพัฒนาตนเอง' : 'การพัฒนาตนเอง') : 'ประวัติส่วนตัว', u.firstName, u.lastName, year].filter(Boolean).join(' ')
     });
   }
 
@@ -772,18 +846,18 @@
         <td>${esc([s.birthDay, Number(s.birthMonth) ? TH_MS[Number(s.birthMonth) - 1] : '', s.birthYear].filter(Boolean).join(' ') || '-')}</td><td class="c">${age(s) || '-'}</td><td>${esc(s.phone || '-')}</td>
         <td class="r">${s.salary && !isNaN(Number(s.salary)) ? Number(s.salary).toLocaleString('th-TH') : '-'}</td><td>${esc(s.insignia || '-')}</td><td>${esc(s.scoutQual || '-')}</td></tr>`).join('')}
       </tbody></table>`;
-    openReport({ title: 'ทะเบียนข้อมูลบุคลากร', subtitle: `จำนวน ${list.length} คน`, build: () => body, landscape: true });
+    openReport({ title: 'ทะเบียนข้อมูลบุคลากร', subtitle: `จำนวน ${list.length} คน`, build: () => body, landscape: true, filename: 'ทะเบียนข้อมูลบุคลากร' });
   }
 
   function reportRecords(list, nameFn, subtitle) {
     const by = {}; list.forEach(r => (by[r.staffId] = by[r.staffId] || []).push(r));
     const rows = Object.keys(by).map(id => ({ id, n: nameFn(id), list: by[id] })).sort((a, b) => a.n.localeCompare(b.n, 'th'));
-    const build = () => `<h2>สรุปรายบุคคล</h2><div class="sum"><span>รวม <b>${list.length}</b> รายการ</span><span><b>${sumHours(list)}</b> ชั่วโมง</span><span>บุคลากร <b>${rows.length}</b> คน</span></div>
+    const build = () => `<h2>สรุปรายบุคคล</h2><div class="rp-sum"><span>รวม <b>${list.length}</b> รายการ</span><span><b>${sumHours(list)}</b> ชั่วโมง</span><span>บุคลากร <b>${rows.length}</b> คน</span></div>
       <table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th class="r">จำนวนรายการ</th><th class="r">ชั่วโมง</th></tr></thead><tbody>
       ${rows.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(x.n)}</td><td class="r">${x.list.length}</td><td class="r">${sumHours(x.list)}</td></tr>`).join('') || '<tr><td colspan="4" class="c">ไม่มีรายการ</td></tr>'}
       </tbody></table>
       ${rows.map(x => `<h2>${esc(x.n)}</h2>${x.list.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate))).map((r, i) => rpRecord(r, i + 1)).join('')}`).join('')}`;
-    openReport({ title: 'รายงานการพัฒนาตนเองของบุคลากร', subtitle, build, recs: list });
+    openReport({ title: 'รายงานการพัฒนาตนเองของบุคลากร', subtitle, build, recs: list, filename: 'รายงานการพัฒนาตนเองของบุคลากร ' + (subtitle.match(/\d{4}/) || [''])[0] });
   }
 
   function viewSettings(v) {
