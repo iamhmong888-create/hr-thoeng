@@ -55,6 +55,10 @@
     if (!backendP) backendP = FB ? import('./firebase-api.js').then(m => m.create(CFG)) : Promise.resolve(Demo);
     return backendP;
   }
+  const lstore = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+  };
   async function api(action, payload = {}) {
     const body = Object.assign({ action, token: S.token }, payload);
     let res;
@@ -193,7 +197,7 @@
       if ($('#su-pass').value !== $('#su-pass2').value) return toast('รหัสผ่านทั้งสองช่องไม่ตรงกัน', true);
       try {
         const d = await busy(() => api('setupAdmin', { email: $('#su-email').value, password: $('#su-pass').value }));
-        S.token = 'firebase'; store.set('hr_token', S.token);
+        S.token = 'firebase'; store.set('hr_token', S.token); lstore.set('hr_setup_done', '1');
         await enter(d); S.tab = 'settings'; render();
         toast('ติดตั้งเรียบร้อย ขั้นต่อไป: นำเข้าข้อมูลบุคลากร');
       } catch (e) { }
@@ -202,7 +206,7 @@
 
   async function enter(d) {
     S.role = d.role; S.user = d.user; S.cache = {};
-    S.meta = await api('meta');
+    S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
     S.tab = store.get('hr_tab_' + S.role) || (S.role === 'admin' ? 'overview' : 'profile');
     render();
@@ -349,8 +353,8 @@
         <div class="meta"><span class="chip ink">${esc(r.type || 'พัฒนาตนเอง')}</span><span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
         <h3>${esc(r.title)}</h3>
         ${opts.who ? `<div class="small"><b>${esc(opts.who)}</b></div>` : ''}
-        <div class="meta"><span>โครงการ: ${esc(r.projectName || '—')}</span>${r.place ? `<span>สถานที่: ${esc(r.place)}</span>` : ''}${r.organizer ? `<span>จัดโดย: ${esc(r.organizer)}</span>` : ''}</div>
-        <div class="small muted" style="margin-top:.2rem">ความรู้ที่ได้รับ</div>
+        <div class="meta"><span><b class="lbl">โครงการ:</b> ${esc(r.projectName || '—')}</span>${r.place ? `<span><b class="lbl">สถานที่:</b> ${esc(r.place)}</span>` : ''}${r.organizer ? `<span><b class="lbl">จัดโดย:</b> ${esc(r.organizer)}</span>` : ''}</div>
+        <div class="small" style="margin-top:.2rem"><b class="lbl">ความรู้ที่ได้รับ</b></div>
         <div class="know ${long ? 'clamp' : ''}">${esc(r.knowledge || '—')}</div>
         ${long ? `<button class="btn ghost sm no-print" data-more style="align-self:flex-start">อ่านทั้งหมด</button>` : ''}
       </div>
@@ -528,7 +532,7 @@
       <div class="actions"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('ov-fy', S.fy)}</label></div></div><div id="ov-body" class="stack"></div>`;
     $('#ov-fy').onchange = e => { S.fy = e.target.value; viewOverview(v); };
     let staff, recs;
-    try { [staff, recs] = await busy(() => Promise.all([getStaff(true), api('listRecords', { year: S.fy })])); } catch (e) { return; }
+    try { [staff, recs] = await busy(() => Promise.all([getStaff(), api('listRecords', { year: S.fy })])); } catch (e) { return; }
     if (!v.isConnected) return;
     const by = {}; recs.forEach(r => (by[r.staffId] = by[r.staffId] || []).push(r));
     const rows = staff.map(s => ({ s, list: by[s.id] || [] })).sort((a, b) => sumHours(b.list) - sumHours(a.list) || b.list.length - a.list.length);
@@ -971,8 +975,11 @@
   (async function boot() {
     app.innerHTML = '<div class="login-wrap"><div class="spinner" role="status" aria-label="กำลังโหลด"></div></div>';
     if (FB) {
-      try { const st = await api('setupStatus'); if (!st.done) return renderSetup(); }
-      catch (e) { return renderLogin(e.message); }
+      // ตรวจว่าติดตั้งแล้วหรือยัง เฉพาะครั้งแรกบนเครื่องนี้ (ลดการรอ 1 รอบ)
+      if (!lstore.get('hr_setup_done')) {
+        try { const st = await api('setupStatus'); if (!st.done) return renderSetup(); lstore.set('hr_setup_done', '1'); }
+        catch (e) { return renderLogin(e.message); }
+      }
     }
     if (S.token || FB) {
       try { const d = await api('me'); await enter(d); return; } catch (e) { S.token = null; store.set('hr_token', null); }

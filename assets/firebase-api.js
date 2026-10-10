@@ -3,11 +3,11 @@
  */
 import { initializeApp, deleteApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword,
+  initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, inMemoryPersistence, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword,
   sendPasswordResetEmail, reauthenticateWithCredential, EmailAuthProvider, updatePassword
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
-  initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, getDocs, setDoc, updateDoc,
+  initializeFirestore, memoryLocalCache, doc, getDoc, getDocs, setDoc, updateDoc,
   collection, query, where, limit, writeBatch
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -43,10 +43,13 @@ function authMsg(e) {
 
 export function create(CFG) {
   const app = initializeApp(CFG.FIREBASE);
-  const auth = getAuth(app);
+  // initializeAuth แทน getAuth: ไม่ต้องโหลด iframe สำหรับล็อกอินแบบ popup (เปิดเร็วขึ้น โดยเฉพาะบน iPhone)
+  const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
+  const secAuth = a => initializeAuth(a, { persistence: inMemoryPersistence });
   auth.languageCode = 'th';
   let db;
-  try { db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  // แคชในหน่วยความจำ: เริ่มทำงานเร็วกว่าแคชถาวร (IndexedDB) ซึ่งช้ามากบน iPhone
+  try { db = initializeFirestore(app, { localCache: memoryLocalCache() }); }
   catch (e) { db = initializeFirestore(app, {}); }
   const D = (...p) => doc(db, ...p);
   const C = name => collection(db, name);
@@ -112,7 +115,7 @@ export function create(CFG) {
     const who = [s.firstName, s.lastName].join(' ');
     if (pw.length < 6) throw new Error(`${who}: ไม่มีเบอร์โทรศัพท์ที่ใช้เป็นรหัสผ่านเริ่มต้นได้`);
     const sec = initializeApp(CFG.FIREBASE, 'sec' + Date.now() + Math.random());
-    const tryCreate = async email => (await createUserWithEmailAndPassword(getAuth(sec), email, pw)).user.uid;
+    const tryCreate = async email => (await createUserWithEmailAndPassword(secAuth(sec), email, pw)).user.uid;
     let warn = '';
     try {
       let email = String(s.email || '').trim().toLowerCase();
@@ -186,7 +189,9 @@ export function create(CFG) {
         } else throw new Error(authMsg(e));
       }
       ctx = null;
-      return Object.assign({ token: 'firebase' }, await meResult(await me()));
+      const c = await me();
+      const [r, meta] = await Promise.all([meResult(c), getMeta()]);
+      return Object.assign({ token: 'firebase', meta }, r);
     },
 
     async forgotPassword(q) {
@@ -198,7 +203,7 @@ export function create(CFG) {
     },
 
     async logout() { ctx = null; await signOut(auth); return true; },
-    async me() { return meResult(await me()); },
+    async me() { const c = await me(); const [r, meta] = await Promise.all([meResult(c), getMeta()]); return Object.assign({ meta }, r); },
     async meta() { await me(); return getMeta(); },
 
     async changePassword(q) {
@@ -394,7 +399,7 @@ export function create(CFG) {
       if ((await getDoc(D('logins', nameKey(username)))).exists()) throw new Error('ชื่อผู้ใช้นี้มีในระบบแล้ว (ซ้ำกับครูหรือผู้ดูแลคนอื่น)');
       const sec = initializeApp(CFG.FIREBASE, 'adm' + Date.now());
       let uid;
-      try { uid = (await createUserWithEmailAndPassword(getAuth(sec), email, pw)).user.uid; }
+      try { uid = (await createUserWithEmailAndPassword(secAuth(sec), email, pw)).user.uid; }
       catch (e) { throw new Error(authMsg(e)); }
       finally { deleteApp(sec).catch(() => { }); }
       const b = writeBatch(db);
