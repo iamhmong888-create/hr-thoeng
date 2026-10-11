@@ -1,6 +1,8 @@
 /* ระบบงานบุคลากร — Frontend (Vanilla JS, ไม่ต้อง build) */
 (() => {
   'use strict';
+  // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
+  const APP_VERSION = '20261011b';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -92,7 +94,7 @@
   /* ---------------- API ---------------- */
   let backendP = null;
   function backend() {
-    if (!backendP) backendP = FB ? import('./firebase-api.js').then(m => m.create(CFG)) : Promise.resolve(Demo);
+    if (!backendP) backendP = FB ? import('./firebase-api.js?v=' + APP_VERSION).then(m => m.create(CFG)) : Promise.resolve(Demo);
     return backendP;
   }
   const lstore = {
@@ -106,6 +108,11 @@
     catch (e) { throw new Error('เชื่อมต่อฐานข้อมูลไม่ได้ ตรวจสอบอินเทอร์เน็ตหรือการตั้งค่า FIREBASE ใน config.js'); }
     if (!res.ok) {
       if (res.error === 'SESSION') { logout(true); throw new Error('หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่'); }
+      // ไฟล์ในเครื่องเป็นรุ่นเก่า (เบราว์เซอร์จำไว้หลังอัปเดตเว็บ) → โหลดหน้าใหม่อัตโนมัติ 1 ครั้ง
+      if (/^ไม่รู้จักคำสั่ง/.test(res.error || '')) {
+        if (store.get('hr_reload') !== APP_VERSION) { store.set('hr_reload', APP_VERSION); location.reload(); }
+        throw new Error('เว็บเพิ่งอัปเดต กรุณาปิดแล้วเปิดหน้าเว็บใหม่ (หรือกดรีเฟรช)');
+      }
       throw new Error(res.error || 'เกิดข้อผิดพลาด');
     }
     return res.data;
