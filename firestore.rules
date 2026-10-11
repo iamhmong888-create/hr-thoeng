@@ -69,8 +69,10 @@ service cloud.firestore {
       }
       function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
       allow read: if isAdmin() || owner();
-      allow create: if hasUser() && request.resource.data.staffId is string && request.resource.data.staffId != ''
-        && request.resource.data.staffId == mySid() && reviewCleared();
+      allow create: if (hasUser() && request.resource.data.staffId is string && request.resource.data.staffId != ''
+        && request.resource.data.staffId == mySid() && reviewCleared())
+        // ผู้ดูแลระบบกู้คืนรายการที่หายไปจากไฟล์สำรอง (เพิ่มได้อย่างเดียว ต้องมีเครื่องหมาย restoredAt)
+        || (isAdmin() && request.resource.data.restoredAt is string && request.resource.data.staffId is string);
       allow update: if (owner() && request.resource.data.staffId == mySid() && reviewCleared())
         || (isAdmin() && resource.data.staffId != mySid()
             && changed().hasOnly(['review', 'reviewNote', 'reviewBy', 'reviewAt', 'projectName']))
@@ -94,7 +96,8 @@ service cloud.firestore {
     // รูปหลักฐาน (แยกเอกสาร เพื่อให้โหลดรายการได้เร็ว)
     match /photos/{rid} {
       allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
-      allow create: if hasUser() && request.resource.data.staffId == mySid();
+      allow create: if (hasUser() && request.resource.data.staffId == mySid())
+        || (isAdmin() && existsAfter(/databases/$(database)/documents/records/$(rid)));
       allow update: if hasUser() && resource.data.staffId == mySid() && request.resource.data.staffId == mySid();
       allow delete: if (hasUser() && (resource == null || resource.data.staffId == mySid()))
         || (isAdmin() && (resource == null || !existsAfter(/databases/$(database)/documents/staff/$(resource.data.staffId))));
