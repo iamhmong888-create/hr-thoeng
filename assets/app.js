@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261011b';
+  const APP_VERSION = '20261011c';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -985,7 +985,7 @@
       idoc.open();
       idoc.write(`<!doctype html><html lang="th"><head><meta charset="utf-8">
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap">
-        <style>html,body{margin:0;background:#fff}${PDF_CSS}.rp-page{display:flow-root;background:#fff}</style></head>
+        <style>html,body{margin:0;background:#fff}${PDF_CSS}.rp-page{display:flow-root;background:#fff}.rp-page>:first-child{margin-top:0!important}.rp-page>:last-child{margin-bottom:0!important}</style></head>
         <body><div class="rp-root" style="width:${CW}px"><header><div class="org">${esc(CFG.ORG_NAME)}</div><h1>${esc(title)}</h1>${subtitle ? `<div class="sub">${esc(subtitle)}</div>` : ''}</header>${build()}<footer>พิมพ์จาก${esc(CFG.APP_TITLE)} เมื่อวันที่ ${thToday()}</footer></div></body></html>`);
       idoc.close();
       // โหลดตัวแปลงภาพเข้าไปในหน้าแยก (ใช้ไฟล์ที่โหลดไว้แล้ว)
@@ -1050,6 +1050,14 @@
         const canvas = await withTimeout(iwin.html2canvas(el, { scale, backgroundColor: '#ffffff', logging: false, useCORS: true, imageTimeout: 15000 }),
           90000, 'สร้าง PDF ใช้เวลานานเกินไป กรุณาลองใหม่ หรือเปิดเว็บใน Safari/Chrome แทนแอป LINE');
         const ratio = canvas.width / CW, totalH = canvas.height / ratio;
+        // เกินหน้าไปเล็กน้อย (ไม่เกิน 6%) → ย่อให้พอดีหน้าเดียว แทนการขึ้นหน้าใหม่ที่มีแต่เส้นขอบ
+        if (totalH > CH && totalH <= CH * 1.06) {
+          const w = CW * CH / totalH;
+          if (!first) pdf.addPage(); first = false;
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', (M + (CW - w) / 2) * k, M * k, w * k, CH * k);
+          canvas.width = canvas.height = 0;
+          continue;
+        }
         for (let done = 0; done < totalH - 1; done += CH) {
           const take = Math.min(CH, totalH - done);
           let img = canvas;
