@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261011c';
+  const APP_VERSION = '20261011d';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -404,7 +404,7 @@
       ${u.canChangePassword && !S.user.isAdminAccount ? `<div class="notice info no-print"><div class="grow">ขณะนี้รหัสผ่านของคุณคือ <b>เบอร์โทรศัพท์</b> เปลี่ยนเป็นรหัสผ่านของคุณเองได้ 1 ครั้ง</div><button class="btn sm" id="go-pw">เปลี่ยนรหัสผ่าน</button></div>` : ''}
       <div class="page-head"><div class="grow profile-hero"><div class="avatar" aria-hidden="true">${esc(initial)}</div>
         <div><h1>${esc(fullName(u))}</h1><div class="muted">${esc([u.position, u.education && 'วุฒิ ' + u.education, u.major].filter(Boolean).join(' · ') || 'บุคลากร')}</div></div></div>
-        <div class="actions no-print"><button class="btn" id="pdf-me">ดาวน์โหลด PDF</button><button class="btn primary" id="edit-me">แก้ไขข้อมูล</button></div></div>
+        <div class="actions no-print"><button class="btn" id="pdf-me">ดู PDF</button><button class="btn primary" id="edit-me">แก้ไขข้อมูล</button></div></div>
       ${profileHTML(u)}
 `;
     $('#pdf-me').onclick = () => reportPerson(u, null, { profile: true });
@@ -619,7 +619,7 @@
     box.innerHTML = `
       <div class="stats">${kindStats(kind, list)}</div>
       <div class="page-head no-print" style="margin-top:.4rem"><div class="grow"><h2>รายการ ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)}${S.devProj ? ` · แสดง ${shown.length} จาก ${list.length} รายการ` : ''}</div></div>
-        <div class="actions"><button class="btn" id="dev-pdf">ดาวน์โหลด PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">${K.add}</button></div></div>
+        <div class="actions"><button class="btn" id="dev-pdf">ดู PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">${K.add}</button></div></div>
       ${K.project ? `<div class="toolbar no-print"><label class="field" style="flex:1 1 320px"><span>แสดงเฉพาะโครงการ</span><select id="dev-proj">
         <option value="">ทุกโครงการ (${list.length} รายการ)</option>
         ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map((p, i) => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${p.id === 'OTHER' ? '' : (i + 1) + '. '}${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
@@ -798,7 +798,7 @@
         ${profileHTML(s)}
         ${KINDS.map(k => { const kl = ofKind(recs, k); if (k !== 'dev' && !kl.length) return ''; return `<section class="panel"><h3>${k === 'dev' ? 'ประวัติการพัฒนาตนเอง' : KIND[k].head} (${kl.length} รายการ${KIND[k].hours ? ` · ${sumHours(kl)} ชั่วโมง` : ''})</h3>
         ${kl.length ? years.filter(y => kl.some(r => r.year === y)).map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${kl.filter(r => r.year === y).map(r => recCard(r, { who: fullName(s), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`; }).join('')}`,
-      foot: `<button class="btn danger" id="sd-del">ลบบุคลากร</button><button class="btn" id="sd-reset">${FB ? 'ส่งลิงก์รีเซ็ตรหัสผ่าน' : 'รีเซ็ตรหัสผ่าน'}</button>${FB ? '<button class="btn" id="sd-recreate">สร้างบัญชีใหม่</button>' : ''}<button class="btn" id="sd-pdf">ดาวน์โหลด PDF</button><button class="btn primary" id="sd-edit">แก้ไขข้อมูล</button>`
+      foot: `<button class="btn danger" id="sd-del">ลบบุคลากร</button><button class="btn" id="sd-reset">${FB ? 'ส่งลิงก์รีเซ็ตรหัสผ่าน' : 'รีเซ็ตรหัสผ่าน'}</button>${FB ? '<button class="btn" id="sd-recreate">สร้างบัญชีใหม่</button>' : ''}<button class="btn" id="sd-pdf">ดู PDF</button><button class="btn primary" id="sd-edit">แก้ไขข้อมูล</button>`
     });
     bindRecList(m.el, recs, () => { m.close(); staffDetail(s, reload); reload && reload(); });
     $('#sd-pdf', m.el).onclick = () => reportPerson(s, recs, { profile: true });
@@ -820,7 +820,7 @@
 
   async function viewStaff(v) {
     v.innerHTML = `<div class="page-head"><div class="grow"><h1>ข้อมูลบุคลากร</h1><div class="muted small" id="st-count"></div></div>
-      <div class="actions"><button class="btn" id="st-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="st-add">+ เพิ่มบุคลากร</button></div></div>
+      <div class="actions"><button class="btn" id="st-pdf">ดู PDF</button><button class="btn accent" id="st-add">+ เพิ่มบุคลากร</button></div></div>
       <div class="toolbar"><label class="field"><span>ค้นหา</span><input type="text" id="st-q" placeholder="ชื่อ นามสกุล วุฒิ วิชาเอก เบอร์โทร"></label></div>
       <div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ-สกุล</th><th>วุฒิ / วิชาเอก</th><th>เบอร์โทร</th><th>อายุ</th><th>เงินเดือน</th><th>รหัสผ่าน</th></tr></thead><tbody id="st-body"></tbody></table></div>`;
     let staff; try { staff = await busy(() => getStaff(true)); } catch (e) { return; }
@@ -848,7 +848,7 @@
     let staff; try { staff = await busy(() => getStaff()); } catch (e) { return; }
     if (!v.isConnected) return;
     v.innerHTML = `<div class="page-head"><div class="grow"><h1>${K.adminHead}</h1><div class="muted small" id="rc-count"></div></div>
-      <div class="actions"><button class="btn" id="rc-pdf">ดาวน์โหลด PDF</button></div></div>
+      <div class="actions"><button class="btn" id="rc-pdf">ดู PDF</button></div></div>
       <div class="toolbar">
         <label class="field"><span>ปีงบประมาณ</span>${yearSelect('rc-fy', S.fy, true)}</label>
         ${K.project ? '<label class="field"><span>โครงการ</span><select id="rc-proj"></select></label>' : ''}
@@ -1043,6 +1043,8 @@
       const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'pt', format: 'a4', compress: true });
       const k = 0.75, scale = isPhone() ? 1.5 : 2;
       let first = true;
+      const views = []; // ภาพแต่ละหน้า สำหรับแสดงตัวอย่างก่อนบันทึก
+      const put = (src, x, y, w, h) => { if (!first) pdf.addPage(); first = false; pdf.addImage(src, 'JPEG', x * k, y * k, w * k, h * k); views.push({ src, x, y, w, h }); };
       for (let n = 0; n < pageEls.length; n++) {
         ov.set(`กำลังสร้างไฟล์ PDF… หน้า ${n + 1} จาก ${pageEls.length}`);
         await sleep(30); // ให้หน้าจออัปเดตข้อความ
@@ -1053,8 +1055,7 @@
         // เกินหน้าไปเล็กน้อย (ไม่เกิน 6%) → ย่อให้พอดีหน้าเดียว แทนการขึ้นหน้าใหม่ที่มีแต่เส้นขอบ
         if (totalH > CH && totalH <= CH * 1.06) {
           const w = CW * CH / totalH;
-          if (!first) pdf.addPage(); first = false;
-          pdf.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', (M + (CW - w) / 2) * k, M * k, w * k, CH * k);
+          put(canvas.toDataURL('image/jpeg', 0.9), M + (CW - w) / 2, M, w, CH);
           canvas.width = canvas.height = 0;
           continue;
         }
@@ -1065,23 +1066,37 @@
             img = document.createElement('canvas'); img.width = canvas.width; img.height = Math.max(1, Math.round(take * ratio));
             img.getContext('2d').drawImage(canvas, 0, Math.round(done * ratio), canvas.width, img.height, 0, 0, canvas.width, img.height);
           }
-          if (!first) pdf.addPage(); first = false;
-          pdf.addImage(img.toDataURL('image/jpeg', 0.9), 'JPEG', M * k, M * k, CW * k, take * k);
+          put(img.toDataURL('image/jpeg', 0.9), M, M, CW, take);
         }
         canvas.width = canvas.height = 0; // คืนหน่วยความจำ
       }
       const total = pdf.getNumberOfPages();
       for (let pg = 1; pg <= total; pg++) { pdf.setPage(pg); pdf.setFontSize(9); pdf.setTextColor(130); pdf.text(`${pg} / ${total}`, (PW - M) * k, (PH - M / 2) * k, { align: 'right' }); }
       const fname = safeName(filename || [title, subtitle].filter(Boolean).join(' ')) + '.pdf';
-      ov.set('กำลังบันทึกไฟล์…');
-      pdf.save(fname);
-      toast('ดาวน์โหลดไฟล์ PDF แล้ว: ' + fname);
+      ov.close();
+      pdfPreview({ pdf, fname, title, views, PW, PH, M });
     } catch (e) {
       toast(e && e.message ? e.message : 'สร้างไฟล์ PDF ไม่สำเร็จ', true);
     } finally {
       if (ifr) ifr.remove();
       ov.close();
     }
+  }
+
+  // แสดงตัวอย่าง PDF ทุกหน้าก่อน ผู้ใช้เลือก "บันทึกไฟล์ PDF" หรือ "ปิด" ได้
+  function pdfPreview({ pdf, fname, title, views, PW, PH, M }) {
+    const pct = (v, t) => (v / t * 100).toFixed(3) + '%';
+    const m = modal({
+      title: 'ตัวอย่าง PDF: ' + title, size: 'pdfv',
+      body: `<div class="pdfv-info small muted">${esc(fname)} · ${views.length} หน้า · ตรวจดูแล้วกด “บันทึกไฟล์ PDF” ถ้าไม่ต้องการบันทึกกด “ปิด”</div>
+        <div class="pdfv-pages">${views.map((v, i) => `<div class="pdfv-page" style="aspect-ratio:${PW}/${PH}" role="img" aria-label="หน้า ${i + 1} จาก ${views.length}">
+          <img src="${v.src}" alt="" style="left:${pct(v.x, PW)};top:${pct(v.y, PH)};width:${pct(v.w, PW)};height:${pct(v.h, PH)}">
+          <span class="pdfv-no" style="right:${pct(M, PW)};bottom:${pct(M / 2 - 4, PH)}">${i + 1} / ${views.length}</span></div>`).join('')}</div>`,
+      foot: `<button class="btn" data-close>ปิด</button><button class="btn primary" id="pv-save">บันทึกไฟล์ PDF</button>`
+    });
+    $('#pv-save', m.el).onclick = () => {
+      try { pdf.save(fname); toast('บันทึกไฟล์ PDF แล้ว'); } catch (e) { toast('บันทึกไฟล์ไม่สำเร็จ กรุณาลองใหม่', true); }
+    };
   }
 
   function rpProfile(u) {
@@ -1223,7 +1238,7 @@
     $('#lv-body').innerHTML = `<div class="notice info"><div class="grow">หน้านี้<b>ดูได้อย่างเดียว</b> ผู้บริหาร/งานบุคลากรเป็นผู้บันทึกข้อมูลการลา ถ้าพบข้อมูลไม่ถูกต้อง กรุณาแจ้งงานบุคลากรเพื่อแก้ไข</div></div>
       ${vacBox(b)}${leaveStats(leaveSummary(list))}
       <div class="page-head" style="margin-top:.4rem"><div class="grow"><h2>รายการลา ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)} · ${list.length} รายการ</div></div>
-        <div class="actions"><button class="btn" id="lv-pdf">ดาวน์โหลด PDF</button></div></div>
+        <div class="actions"><button class="btn" id="lv-pdf">ดู PDF</button></div></div>
       ${leaveTable(list.slice().reverse(), false)}`;
     $('#lv-pdf').onclick = () => reportLeavePerson(S.user, list, S.fy, b);
   }
@@ -1231,7 +1246,7 @@
   // หน้าผู้บริหาร: สรุปรายบุคคล + บันทึก/แก้ไข/ลบ
   async function viewLeaves(v) {
     v.innerHTML = `<div class="page-head"><div class="grow"><h1>การลาของบุคลากร</h1><div class="muted small">${S.fy ? fyRange(S.fy) : ''} · คลิกที่ชื่อเพื่อดู/แก้ไขรายการลาและวันลาสะสม</div></div>
-      <div class="actions"><button class="btn" id="lvs-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="lvs-add">+ บันทึกการลา</button></div></div>
+      <div class="actions"><button class="btn" id="lvs-pdf">ดู PDF</button><button class="btn accent" id="lvs-add">+ บันทึกการลา</button></div></div>
       <div class="toolbar"><label class="field" style="max-width:240px"><span>ปีงบประมาณ</span>${yearSelect('lvs-fy', S.fy)}</label>
         <label class="field"><span>ค้นหาชื่อ</span><input type="text" id="lvs-q" placeholder="ชื่อ หรือ นามสกุล"></label></div>
       <div id="lvs-body"><div class="empty-state">กำลังโหลด…</div></div>`;
@@ -1266,7 +1281,7 @@
       body: `<div class="small muted">ปีงบประมาณ พ.ศ. ${esc(year)} (${fyRange(year)})</div>${vacBox(b)}
         <div style="margin-top:-.4rem"><button class="btn sm" id="ls-bal">แก้ไขวันลาสะสม / สิทธิ์ลาพักผ่อน</button>${b.auto ? ' <span class="small muted">วันสะสมคำนวณอัตโนมัติจากปีที่แล้ว</span>' : ' <span class="small muted">วันสะสมกำหนดเอง</span>'}</div>
         ${leaveStats(leaveSummary(list))}${leaveTable(list.slice().reverse(), true)}`,
-      foot: `<button class="btn" id="ls-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="ls-add">+ บันทึกการลา</button>`
+      foot: `<button class="btn" id="ls-pdf">ดู PDF</button><button class="btn accent" id="ls-add">+ บันทึกการลา</button>`
     });
     const again = () => { m.close(); leaveStaff(s, year, reloadOuter); reloadOuter && reloadOuter(); };
     const ctx = { leaves: all, bals };
