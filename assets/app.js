@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261011d';
+  const APP_VERSION = '20261011f';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -82,7 +82,13 @@
   const fyRange = y => `1 ต.ค. ${+y - 1} – 30 ก.ย. ${y}`;
   const money = v => { const n = Number(String(v).replace(/,/g, '')); return v !== '' && !isNaN(n) ? n.toLocaleString('th-TH') + ' บาท' : v; };
   const age = u => { const y = Number(u.birthYear); if (!y) return ''; const d = new Date(); let a = d.getFullYear() + 543 - y; const m = Number(u.birthMonth), dd = Number(u.birthDay); if (m && (d.getMonth() + 1 < m || (d.getMonth() + 1 === m && d.getDate() < dd))) a--; return a; };
-  const birthText = u => { const y = u.birthYear; if (!y) return ''; const m = Number(u.birthMonth); return [u.birthDay, m ? TH_M[m - 1] : '', y].filter(Boolean).join(' ') + (age(u) ? ` (อายุ ${age(u)} ปี)` : ''); };
+  // วัน/เดือนเกิด "-" = ไม่มีวันเกิด/ไม่มีเดือนเกิด (ทราบเฉพาะปี)
+  const bDay = u => /^\d+$/.test(String(u.birthDay || '')) ? String(u.birthDay) : '';
+  const birthText = u => {
+    const y = u.birthYear; if (!y) return ''; const m = Number(u.birthMonth);
+    const d = bDay(u) || (u.birthDay === '-' ? '-' : ''), mm = m ? TH_M[m - 1] : (u.birthMonth === '-' ? '-' : '');
+    return [d, mm, y].filter(Boolean).join(' ') + (age(u) ? ` (อายุ ${age(u)} ปี)` : '');
+  };
   const PHOTO = {}; // ภาพจาก Firestore: key "fs:<recordId>:<n>" → data URL
   const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
   const photoUrl = id => !id ? '' : /^fs:/.test(id) ? (PHOTO[id] || '') : id;
@@ -419,8 +425,8 @@
       const val = esc(u[k] ?? '');
       let ctl;
       if (o.type === 'birth') {
-        ctl = `<div class="date3"><select id="pf-birthDay" aria-label="วัน"><option value="">วัน</option>${range(1, 31).map(d => `<option ${String(u.birthDay) === String(d) ? 'selected' : ''}>${d}</option>`).join('')}</select>
-          <select id="pf-birthMonth" aria-label="เดือน"><option value="">เดือน</option>${TH_M.map((m, i) => `<option value="${i + 1}" ${Number(u.birthMonth) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
+        ctl = `<div class="date3"><select id="pf-birthDay" aria-label="วัน"><option value="">วัน</option><option value="-" ${u.birthDay === '-' ? 'selected' : ''}>ไม่มีวันเกิด</option>${range(1, 31).map(d => `<option ${String(u.birthDay) === String(d) ? 'selected' : ''}>${d}</option>`).join('')}</select>
+          <select id="pf-birthMonth" aria-label="เดือน"><option value="">เดือน</option><option value="-" ${u.birthMonth === '-' ? 'selected' : ''}>ไม่มีเดือนเกิด</option>${TH_M.map((m, i) => `<option value="${i + 1}" ${Number(u.birthMonth) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
           <input type="number" id="pf-birthYear" aria-label="ปี พ.ศ." placeholder="พ.ศ." min="2470" max="2600" value="${esc(u.birthYear || '')}"></div>`;
       } else if (o.type === 'textarea') ctl = `<textarea id="pf-${k}" rows="2" ${locked ? 'disabled' : ''}>${val}</textarea>`;
       else if (o.type === 'role') ctl = `<select id="pf-${k}"><option value="">ครู/บุคลากร</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>ผู้บริหาร (เห็นข้อมูลทุกคน)</option></select>`;
@@ -1153,7 +1159,7 @@
   function reportStaffList(list) {
     const body = `<table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>วุฒิ / วิชาเอก</th><th>วันเกิด</th><th class="c">อายุ</th><th>เบอร์โทร</th><th class="r">เงินเดือน</th><th>เครื่องราชฯ</th><th>วุฒิลูกเสือ</th></tr></thead><tbody>
       ${list.map((s, i) => `<tr><td class="c">${i + 1}</td><td>${esc(fullName(s))}</td><td>${esc(s.position || '-')}</td><td>${esc([s.education, s.major].filter(Boolean).join(' / ') || '-')}</td>
-        <td>${esc([s.birthDay, Number(s.birthMonth) ? TH_MS[Number(s.birthMonth) - 1] : '', s.birthYear].filter(Boolean).join(' ') || '-')}</td><td class="c">${age(s) || '-'}</td><td>${esc(s.phone || '-')}</td>
+        <td>${esc([bDay(s) || (s.birthDay === '-' ? '-' : ''), Number(s.birthMonth) ? TH_MS[Number(s.birthMonth) - 1] : (s.birthMonth === '-' ? '-' : ''), s.birthYear].filter(Boolean).join(' ') || '-')}</td><td class="c">${age(s) || '-'}</td><td>${esc(s.phone || '-')}</td>
         <td class="r">${s.salary && !isNaN(Number(s.salary)) ? Number(s.salary).toLocaleString('th-TH') : '-'}</td><td>${esc(s.insignia || '-')}</td><td>${esc(s.scoutQual || '-')}</td></tr>`).join('')}
       </tbody></table>`;
     openReport({ title: 'ทะเบียนข้อมูลบุคลากร', subtitle: `จำนวน ${list.length} คน`, build: () => body, landscape: true, filename: 'ทะเบียนข้อมูลบุคลากร' });
