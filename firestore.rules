@@ -31,6 +31,10 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow write: if isAdmin() || bootstrapping();
+      // ครูเปลี่ยนชื่อตนเอง: สร้างชื่อใหม่ (ที่ยังไม่มีคนใช้) และลบชื่อเดิมได้ เฉพาะที่ผูกกับอีเมลของตนเอง
+      allow create: if hasUser() && request.resource.data.keys().hasOnly(['email'])
+        && request.resource.data.email == request.auth.token.email;
+      allow delete: if hasUser() && resource.data.email == request.auth.token.email;
     }
 
     // บัญชี → รหัสบุคลากร และสิทธิ์
@@ -48,30 +52,52 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         mySid() == sid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'prefix', 'phone', 'email', 'address', 'birthDay', 'birthMonth', 'birthYear', 'education', 'major',
-          'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'insignia',
+          'prefix', 'firstName', 'lastName', 'position', 'citizenId', 'phone', 'email', 'address',
+          'birthDay', 'birthMonth', 'birthYear', 'education', 'major',
+          'scoutQual', 'scoutType', 'scoutPosition', 'scoutFee', 'redCrossQual', 'redCrossDate', 'salary', 'insignia',
           'pwChanged', 'updatedAt'])
         && (!('pwChanged' in request.resource.data.diff(resource.data).affectedKeys())
             || request.resource.data.pwChanged == true)
       );
     }
 
-    // รายการพัฒนาตนเอง และรูปหลักฐาน (แยกเอกสาร เพื่อให้โหลดรายการได้เร็ว)
+    // รายการพัฒนาตนเอง: เจ้าของเท่านั้นที่เพิ่ม/แก้/ลบได้ ผู้บริหารดูได้ทุกคนและบันทึกผลการตรวจได้อย่างเดียว
     match /records/{rid} {
-      allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+      function owner() { return hasUser() && resource.data.staffId == mySid(); }
+      function reviewCleared() {
+        return request.resource.data.get('review', '') == '' && request.resource.data.get('reviewBy', '') == '';
+      }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+      allow read: if isAdmin() || owner();
       allow create: if hasUser() && request.resource.data.staffId is string && request.resource.data.staffId != ''
-        && (isAdmin() || request.resource.data.staffId == mySid());
-      allow update: if isAdmin()
-        || (hasUser() && resource.data.staffId == mySid() && request.resource.data.staffId == mySid());
-      allow delete: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+        && request.resource.data.staffId == mySid() && reviewCleared();
+      allow update: if (owner() && request.resource.data.staffId == mySid() && reviewCleared())
+        || (isAdmin() && resource.data.staffId != mySid()
+            && changed().hasOnly(['review', 'reviewNote', 'reviewBy', 'reviewAt', 'projectName']))
+        || (isAdmin() && changed().hasOnly(['projectName']));
+      // ผู้บริหารลบได้เฉพาะตอนลบบุคลากรคนนั้นออกจากระบบ (ลบพร้อมกันใน batch เดียว)
+      allow delete: if owner()
+        || (isAdmin() && !existsAfter(/databases/$(database)/documents/staff/$(resource.data.staffId)));
     }
 
+    // การลา: ครูอ่านได้เฉพาะของตนเอง (ดูอย่างเดียว) บันทึก/แก้ไข/ลบได้เฉพาะผู้บริหาร/ผู้ดูแลระบบ
+    match /leaves/{lid} {
+      allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+      allow write: if isAdmin();
+    }
+    // วันลาพักผ่อนสะสม/สิทธิ์ต่อปี: ครูอ่านได้เฉพาะของตนเอง บันทึกได้เฉพาะผู้บริหาร/ผู้ดูแลระบบ
+    match /leaveBalances/{bid} {
+      allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
+      allow write: if isAdmin();
+    }
+
+    // รูปหลักฐาน (แยกเอกสาร เพื่อให้โหลดรายการได้เร็ว)
     match /photos/{rid} {
       allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
-      allow create: if hasUser() && (isAdmin() || request.resource.data.staffId == mySid());
-      allow update: if isAdmin()
-        || (hasUser() && resource.data.staffId == mySid() && request.resource.data.staffId == mySid());
-      allow delete: if isAdmin() || (hasUser() && (resource == null || resource.data.staffId == mySid()));
+      allow create: if hasUser() && request.resource.data.staffId == mySid();
+      allow update: if hasUser() && resource.data.staffId == mySid() && request.resource.data.staffId == mySid();
+      allow delete: if (hasUser() && (resource == null || resource.data.staffId == mySid()))
+        || (isAdmin() && (resource == null || !existsAfter(/databases/$(database)/documents/staff/$(resource.data.staffId))));
     }
   }
 }
