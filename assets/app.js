@@ -343,8 +343,8 @@
 
   /* ---------------- shell ---------------- */
   const TABS = {
-    teacher: [['profile', 'ประวัติส่วนตัว'], ...KINDS.map(k => [KIND[k].tab, KIND[k].menu]), ['password', 'เปลี่ยนรหัสผ่าน']],
-    admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ...KINDS.map(k => [KIND[k].adminTab, KIND[k].adminMenu]), ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
+    teacher: [['profile', 'ประวัติส่วนตัว'], ...KINDS.map(k => [KIND[k].tab, KIND[k].menu]), ['leave', 'การลา'], ['password', 'เปลี่ยนรหัสผ่าน']],
+    admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ...KINDS.map(k => [KIND[k].adminTab, KIND[k].adminMenu]), ['leaves', 'การลา'], ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
   };
   function demoBar() { return `<div class="demo-bar">โหมดทดลอง: ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ใส่ค่า FIREBASE ใน config.js เพื่อใช้งานจริง</div>`; }
 
@@ -353,7 +353,7 @@
   window.addEventListener('resize', () => fitAppbar());
   function render() {
     let tabs = TABS[S.role];
-    if (S.role === 'admin' && !S.user.isAdminAccount) tabs = tabs.slice(0, 2 + KINDS.length + 1).concat([['profile', 'ประวัติส่วนตัวของฉัน'], ...KINDS.map(k => [KIND[k].tab, KIND[k].mine]), ['password', 'เปลี่ยนรหัสผ่าน']]);
+    if (S.role === 'admin' && !S.user.isAdminAccount) tabs = tabs.filter(t => t[0] !== 'password').concat([['profile', 'ประวัติส่วนตัวของฉัน'], ...KINDS.map(k => [KIND[k].tab, KIND[k].mine]), ['leave', 'การลาของฉัน'], ['password', 'เปลี่ยนรหัสผ่าน']]);
     if (!tabs.some(t => t[0] === S.tab)) S.tab = tabs[0][0];
     document.title = `${CFG.APP_TITLE} | ${CFG.ORG_NAME}`;
     app.innerHTML = `${DEMO ? demoBar() : ''}
@@ -368,7 +368,7 @@
     paintBadge();
     $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; store.set('hr_tab_' + S.role, S.tab); render(); });
     const v = $('#view');
-    const views = { profile: viewProfile, password: viewPassword, overview: viewOverview, staff: viewStaff, settings: viewSettings };
+    const views = { profile: viewProfile, password: viewPassword, overview: viewOverview, staff: viewStaff, settings: viewSettings, leave: viewLeave, leaves: viewLeaves };
     KINDS.forEach(k => { views[KIND[k].tab] = el => viewKind(el, k); views[KIND[k].adminTab] = el => viewRecords(el, k); });
     (views[S.tab] || viewProfile)(v);
   }
@@ -1141,6 +1141,246 @@
     openReport({ title: K.reportAll, subtitle, build, recs: list, filename: K.reportAll + ' ' + (subtitle.match(/\d{4}/) || [''])[0] });
   }
 
+  /* ---------------- การลา: ครูดูของตนเองได้อย่างเดียว · ผู้บริหาร/ผู้ดูแลระบบบันทึก ---------------- */
+  const LEAVE_TYPES = ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาพักผ่อน', 'ลาคลอดบุตร', 'ลาไปช่วยเหลือภริยาที่คลอดบุตร', 'ลาอุปสมบท/ประกอบพิธีฮัจย์', 'ขาดราชการ', 'ลาอื่น ๆ'];
+  const LEAVE_MAIN = ['ลาป่วย', 'ลากิจส่วนตัว', 'ลาพักผ่อน'];
+  const VAC = 'ลาพักผ่อน', VAC_QUOTA = 10; // สิทธิ์ลาพักผ่อนต่อปีงบประมาณ (ค่าเริ่มต้น)
+  const leaveDays = list => list.reduce((a, l) => a + (Number(l.days) || 0), 0);
+  const fmtDays = n => { n = Math.round(n * 10) / 10; return n.toLocaleString('th-TH'); };
+  const fyOf = iso => { const p = parseISO(iso); return p ? String(p.y + 543 + (p.m >= 10 ? 1 : 0)) : ''; };
+  const workDays = (a, b) => {
+    const p = parseISO(a), q = parseISO(b || a); if (!p || !q) return 0;
+    let d = new Date(p.y, p.m - 1, p.d), e = new Date(q.y, q.m - 1, q.d), n = 0;
+    for (let i = 0; d <= e && i < 400; i++, d.setDate(d.getDate() + 1)) if (d.getDay() % 6) n++;
+    return n;
+  };
+  /* วันลาพักผ่อนคงเหลือ = สิทธิ์ปีนี้ (10) + วันสะสมจากปีที่แล้ว − วันที่ลาพักผ่อนไปแล้วในปีนี้
+     วันสะสมจากปีที่แล้ว: ถ้าผู้บริหารไม่ได้กรอกเอง ระบบยกยอดวันคงเหลือของปีงบประมาณก่อนหน้าให้อัตโนมัติ */
+  function vacBalance(staffId, year, leaves, bals, skipId) {
+    const years = S.meta.years.slice().sort();
+    const memo = {};
+    const calc = y => {
+      if (memo[y]) return memo[y];
+      const b = bals.find(x => x.staffId === staffId && x.year === y) || {};
+      const quota = b.quota !== undefined && b.quota !== '' ? Number(b.quota) : VAC_QUOTA;
+      const prev = String(Number(y) - 1);
+      const auto = !(b.carry !== undefined && b.carry !== '');
+      const carry = !auto ? Number(b.carry) : (years.includes(prev) && prev >= years[0] ? Math.max(0, calc(prev).remain) : 0);
+      const used = leaveDays(leaves.filter(l => l.staffId === staffId && l.year === y && l.type === VAC && l.id !== skipId));
+      return (memo[y] = { quota, carry, auto, used, remain: quota + carry - used });
+    };
+    return calc(String(year));
+  }
+  function leaveSummary(list) {
+    const g = t => { const l = list.filter(x => x.type === t); return { n: l.length, d: leaveDays(l) }; };
+    const other = list.filter(x => !LEAVE_MAIN.includes(x.type));
+    const o = {}; LEAVE_MAIN.forEach(t => o[t] = g(t));
+    o.other = { n: other.length, d: leaveDays(other) };
+    o.total = leaveDays(list);
+    return o;
+  }
+  const leaveRange = l => TH_M.reduce((t, m, i) => t.replace(m, TH_MS[i]), thRange(l.startDate, l.endDate));
+  const leaveTable = (list, ops) => `<div class="table-wrap"><table><thead><tr><th>#</th><th>ประเภท</th><th>วันที่</th><th class="r">จำนวนวัน</th><th>หมายเหตุ</th>${ops ? '<th></th>' : ''}</tr></thead><tbody>
+    ${list.map((l, i) => `<tr data-lid="${esc(l.id)}"><td class="num muted">${i + 1}</td><td><span class="chip ${l.type === 'ลาป่วย' ? 'warn' : l.type === 'ขาดราชการ' ? 'bad' : l.type === VAC ? 'good' : 'ink'}">${esc(l.type)}</span></td><td class="num">${esc(leaveRange(l))}</td>
+      <td class="r num">${l.days ? esc(fmtDays(Number(l.days) || 0)) : '—'}</td><td class="small">${esc(l.note || '')}</td>
+      ${ops ? `<td class="r" style="white-space:nowrap"><button class="btn sm" data-ledit>แก้ไข</button> <button class="btn sm danger" data-ldel>ลบ</button></td>` : ''}</tr>`).join('') || `<tr><td colspan="${ops ? 6 : 5}" class="muted">ไม่มีรายการลาในปีงบประมาณนี้</td></tr>`}
+    </tbody></table></div>`;
+  const vacBox = b => `<section class="panel vac-box"><h3>วันลาพักผ่อน</h3><div class="vac-row">
+      <div><div class="k">สะสมจากปีงบประมาณที่แล้ว</div><div class="v">${fmtDays(b.carry)} <small>วัน</small></div></div>
+      <div><div class="k">สิทธิ์ปีนี้</div><div class="v">${fmtDays(b.quota)} <small>วัน</small></div></div>
+      <div><div class="k">ใช้ไปแล้ว</div><div class="v">${fmtDays(b.used)} <small>วัน</small></div></div>
+      <div class="vac-remain ${b.remain < 0 ? 'neg' : ''}"><div class="k">คงเหลือ</div><div class="v">${fmtDays(b.remain)} <small>วัน</small></div></div></div></section>`;
+  const leaveStats = sm => `<div class="stats">
+      ${LEAVE_MAIN.map(t => `<div class="stat"><div class="v">${fmtDays(sm[t].d)}<span class="small muted"> วัน</span></div><div class="k">${t} (${sm[t].n} ครั้ง)</div></div>`).join('')}
+      ${sm.other.n ? `<div class="stat"><div class="v">${fmtDays(sm.other.d)}<span class="small muted"> วัน</span></div><div class="k">การลาอื่น ๆ (${sm.other.n} ครั้ง)</div></div>` : ''}
+      <div class="stat"><div class="v">${fmtDays(sm.total)}<span class="small muted"> วัน</span></div><div class="k">รวมวันลาทั้งหมด</div></div></div>`;
+
+  // หน้าของครู (และ "การลาของฉัน" ของผู้บริหาร): ดูอย่างเดียว
+  async function viewLeave(v) {
+    v.innerHTML = `<div class="page-head"><div class="grow"><h1>การลา</h1><div class="muted small">ข้อมูลการลาที่งานบุคลากรบันทึกไว้ กรุณาตรวจสอบความถูกต้อง</div></div>
+      <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('lv-fy', S.fy)}</label></div></div>
+      <div id="lv-body" class="stack"><div class="empty-state">กำลังโหลด…</div></div>`;
+    $('#lv-fy').onchange = e => { S.fy = e.target.value; viewLeave(v); };
+    if (!S.meta.years.length) { $('#lv-body').innerHTML = '<div class="empty-state">ยังไม่มีปีงบประมาณในระบบ</div>'; return; }
+    let all, bals; try { [all, bals] = await busy(() => Promise.all([api('listLeaves', { mine: true }), api('listLeaveBalances', { mine: true })])); } catch (e) { return; }
+    if (!v.isConnected) return;
+    const list = all.filter(l => l.year === S.fy), b = vacBalance(S.user.id, S.fy, all, bals);
+    $('#lv-body').innerHTML = `<div class="notice info"><div class="grow">หน้านี้<b>ดูได้อย่างเดียว</b> ผู้บริหาร/งานบุคลากรเป็นผู้บันทึกข้อมูลการลา ถ้าพบข้อมูลไม่ถูกต้อง กรุณาแจ้งงานบุคลากรเพื่อแก้ไข</div></div>
+      ${vacBox(b)}${leaveStats(leaveSummary(list))}
+      <div class="page-head" style="margin-top:.4rem"><div class="grow"><h2>รายการลา ปีงบประมาณ พ.ศ. ${esc(S.fy)}</h2><div class="small muted">${fyRange(S.fy)} · ${list.length} รายการ</div></div>
+        <div class="actions"><button class="btn" id="lv-pdf">ดาวน์โหลด PDF</button></div></div>
+      ${leaveTable(list.slice().reverse(), false)}`;
+    $('#lv-pdf').onclick = () => reportLeavePerson(S.user, list, S.fy, b);
+  }
+
+  // หน้าผู้บริหาร: สรุปรายบุคคล + บันทึก/แก้ไข/ลบ
+  async function viewLeaves(v) {
+    v.innerHTML = `<div class="page-head"><div class="grow"><h1>การลาของบุคลากร</h1><div class="muted small">${S.fy ? fyRange(S.fy) : ''} · คลิกที่ชื่อเพื่อดู/แก้ไขรายการลาและวันลาสะสม</div></div>
+      <div class="actions"><button class="btn" id="lvs-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="lvs-add">+ บันทึกการลา</button></div></div>
+      <div class="toolbar"><label class="field" style="max-width:240px"><span>ปีงบประมาณ</span>${yearSelect('lvs-fy', S.fy)}</label>
+        <label class="field"><span>ค้นหาชื่อ</span><input type="text" id="lvs-q" placeholder="ชื่อ หรือ นามสกุล"></label></div>
+      <div id="lvs-body"><div class="empty-state">กำลังโหลด…</div></div>`;
+    $('#lvs-fy').onchange = e => { S.fy = e.target.value; viewLeaves(v); };
+    let staff, all, bals;
+    try { [staff, all, bals] = await busy(() => Promise.all([getStaff(), api('listLeaves', {}), api('listLeaveBalances', {})])); } catch (e) { return; }
+    if (!v.isConnected) return;
+    const reload = () => viewLeaves(v);
+    const list = all.filter(l => l.year === S.fy);
+    const rows = staff.map(s => { const l = list.filter(x => x.staffId === s.id); return { s, list: l, sm: leaveSummary(l), b: vacBalance(s.id, S.fy, all, bals) }; });
+    const cell = o => o.n ? `${fmtDays(o.d)} <span class="small muted">(${o.n})</span>` : '—';
+    const draw = () => {
+      const q = $('#lvs-q').value.trim().toLowerCase();
+      const shown = rows.filter(x => !q || fullName(x.s).toLowerCase().includes(q));
+      $('#lvs-body').innerHTML = `<div class="small muted" style="margin-bottom:.5rem">ตัวเลข = จำนวนวัน (ในวงเล็บ = จำนวนครั้ง) · ลาพักผ่อนคงเหลือ = สิทธิ์ปีนี้ ${VAC_QUOTA} วัน + สะสมจากปีที่แล้ว − ที่ลาไปแล้ว · ทั้งหมด ${list.length} รายการ</div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ-สกุล</th>${LEAVE_MAIN.map(t => `<th class="r">${t}</th>`).join('')}<th class="r">ลาอื่น ๆ</th><th class="r">รวมวันลา</th><th class="r">สะสมจากปีที่แล้ว</th><th class="r">ลาพักผ่อนคงเหลือ</th></tr></thead><tbody>
+        ${shown.map((x, i) => `<tr class="click" data-id="${esc(x.s.id)}"><td class="num muted">${i + 1}</td><td><b>${esc(fullName(x.s))}</b></td>${LEAVE_MAIN.map(t => `<td class="r num">${cell(x.sm[t])}</td>`).join('')}
+          <td class="r num">${cell(x.sm.other)}</td><td class="r num">${x.sm.total ? fmtDays(x.sm.total) : '—'}</td><td class="r num">${fmtDays(x.b.carry)}</td><td class="r num"><b style="color:${x.b.remain < 0 ? 'var(--bad)' : 'var(--good)'}">${fmtDays(x.b.remain)}</b></td></tr>`).join('') || '<tr><td colspan="9" class="muted">ไม่พบข้อมูล</td></tr>'}
+        </tbody></table></div>`;
+      $$('#lvs-body tr.click').forEach(tr => tr.onclick = () => leaveStaff(staff.find(s => s.id === tr.dataset.id), S.fy, reload));
+    };
+    $('#lvs-q').oninput = draw; draw();
+    $('#lvs-add').onclick = () => leaveForm({ year: S.fy }, staff, { leaves: all, bals }, reload);
+    $('#lvs-pdf').onclick = () => reportLeaveSummary(rows, S.fy);
+  }
+
+  async function leaveStaff(s, year, reloadOuter) {
+    let all, bals; try { [all, bals] = await busy(() => Promise.all([api('listLeaves', { staffId: s.id }), api('listLeaveBalances', { staffId: s.id })])); } catch (e) { return; }
+    const list = all.filter(l => l.year === year), b = vacBalance(s.id, year, all, bals);
+    const m = modal({
+      title: `การลา: ${fullName(s)}`,
+      body: `<div class="small muted">ปีงบประมาณ พ.ศ. ${esc(year)} (${fyRange(year)})</div>${vacBox(b)}
+        <div style="margin-top:-.4rem"><button class="btn sm" id="ls-bal">แก้ไขวันลาสะสม / สิทธิ์ลาพักผ่อน</button>${b.auto ? ' <span class="small muted">วันสะสมคำนวณอัตโนมัติจากปีที่แล้ว</span>' : ' <span class="small muted">วันสะสมกำหนดเอง</span>'}</div>
+        ${leaveStats(leaveSummary(list))}${leaveTable(list.slice().reverse(), true)}`,
+      foot: `<button class="btn" id="ls-pdf">ดาวน์โหลด PDF</button><button class="btn accent" id="ls-add">+ บันทึกการลา</button>`
+    });
+    const again = () => { m.close(); leaveStaff(s, year, reloadOuter); reloadOuter && reloadOuter(); };
+    const ctx = { leaves: all, bals };
+    $('#ls-add', m.el).onclick = () => leaveForm({ year, staffId: s.id }, [s], ctx, again);
+    $('#ls-pdf', m.el).onclick = () => reportLeavePerson(s, list, year, b);
+    $('#ls-bal', m.el).onclick = () => balanceForm(s, year, b, again);
+    $$('tr[data-lid]', m.el).forEach(tr => {
+      const l = list.find(x => x.id === tr.dataset.lid);
+      $('[data-ledit]', tr).onclick = () => leaveForm(l, [s], ctx, again);
+      $('[data-ldel]', tr).onclick = async () => {
+        if (!(await confirmBox(`ลบรายการ${l.type} ${leaveRange(l)} ของ ${fullName(s)}?`, 'ลบรายการ'))) return;
+        try { await busy(() => api('deleteLeave', { id: l.id })); toast('ลบรายการลาแล้ว'); again(); } catch (e) { }
+      };
+    });
+  }
+
+  function balanceForm(s, year, b, reload) {
+    const m = modal({
+      title: 'วันลาพักผ่อน', size: 'sm',
+      body: `<div><b>${esc(fullName(s))}</b><div class="small muted">ปีงบประมาณ พ.ศ. ${esc(year)}</div></div>
+        <label class="field"><span>วันลาพักผ่อนสะสมจากปีงบประมาณที่แล้ว (วัน)</span><input type="number" id="bf-carry" min="0" step="0.5" value="${esc(b.carry)}"></label>
+        <label class="field"><span>สิทธิ์ลาพักผ่อนปีนี้ (วัน)</span><input type="number" id="bf-quota" min="0" step="0.5" value="${esc(b.quota)}"></label>
+        <p class="small muted" style="margin:0">ปีงบประมาณถัดไป ระบบยกยอดวันคงเหลือของปีนี้ไปเป็นวันสะสมให้อัตโนมัติ</p>`,
+      foot: `${b.auto ? '' : '<button class="btn ghost" id="bf-auto">ให้ระบบคำนวณวันสะสมเอง</button>'}<button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="bf-ok">บันทึก</button>`
+    });
+    const send = async data => { try { await busy(() => api('saveLeaveBalance', Object.assign({ staffId: s.id, year }, data))); m.close(); toast('บันทึกวันลาพักผ่อนแล้ว'); reload && reload(); } catch (e) { } };
+    $('#bf-ok', m.el).onclick = () => {
+      const c = $('#bf-carry', m.el).value.trim(), q = $('#bf-quota', m.el).value.trim();
+      if (c === '' || q === '') return toast('กรุณากรอกจำนวนวันให้ครบ', true);
+      send({ carry: Number(c) === b.carry && b.auto ? '' : c, quota: Number(q) === VAC_QUOTA ? '' : q });
+    };
+    const au = $('#bf-auto', m.el); if (au) au.onclick = () => send({ carry: '' });
+  }
+
+  function leaveForm(l, staff, ctx, reload) {
+    const isNew = !l.id;
+    const today = new Date(); const todayISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const m = modal({
+      title: isNew ? 'บันทึกการลา' : 'แก้ไขรายการลา',
+      body: `<div class="grid">
+        <label class="field wide"><span>บุคลากร <span class="req">*</span></span><select id="lf-staff" ${staff.length === 1 ? 'disabled' : ''}>${staff.length > 1 ? '<option value="">— เลือกบุคลากร —</option>' : ''}${staff.map((s, i) => `<option value="${esc(s.id)}" ${s.id === l.staffId ? 'selected' : ''}>${staff.length > 1 ? (i + 1) + '. ' : ''}${esc(fullName(s))}</option>`).join('')}</select></label>
+        <label class="field"><span>ประเภทการลา <span class="req">*</span></span><select id="lf-type">${LEAVE_TYPES.concat(l.type && !LEAVE_TYPES.includes(l.type) ? [l.type] : []).map(t => `<option ${t === l.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+        <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('lf-year', l.year || S.fy)}</label>
+        <div class="wide dates"><div class="field"><span>ตั้งแต่วันที่ <span class="req">*</span></span>${dateSel('lf-s', l.startDate || todayISO)}</div>
+        <div class="field"><span>ถึงวันที่ (ถ้าลาหลายวัน)</span>${dateSel('lf-e', l.endDate, true)}</div></div>
+        <label class="field"><span>จำนวนวันลา (วันทำการ) <span class="req">*</span></span><input type="number" id="lf-days" min="0" step="0.5" value="${esc(l.days || '')}"></label>
+        <div class="field" style="justify-content:flex-end"><span class="small muted" id="lf-hint"></span></div>
+        <div class="wide vac-form" id="lf-vac">
+          <label class="field"><span>วันลาพักผ่อนสะสมจากปีงบประมาณที่แล้ว</span><input type="number" id="lf-carry" min="0" step="0.5"></label>
+          <label class="field"><span>สิทธิ์ลาพักผ่อนปีนี้</span><input type="number" id="lf-quota" min="0" step="0.5"></label>
+          <div class="field"><span>วันลาพักผ่อนคงเหลือ</span><div class="vac-out" id="lf-remain" aria-live="polite">—</div></div>
+          <div class="small muted wide" id="lf-vnote"></div>
+        </div>
+        <label class="field wide"><span>หมายเหตุ</span><input type="text" id="lf-note" value="${esc(l.note || '')}" placeholder="เช่น ลาครึ่งวันเช้า, มีใบรับรองแพทย์"></label>
+      </div>`,
+      foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="lf-save">บันทึก</button>`
+    });
+    const el = m.el;
+    let touched = !isNew, balDirty = { carry: false, quota: false }, base = null, baseKey = '';
+    const cur = () => vacBalance($('#lf-staff', el).value, $('#lf-year', el).value, ctx.leaves, ctx.bals, l.id);
+    // ช่องวันลาพักผ่อน: คงเหลือ = สิทธิ์ + สะสม − ที่ลาไปแล้ว − (วันลาในรายการนี้ ถ้าเป็นลาพักผ่อน)
+    const paintVac = () => {
+      const sid = $('#lf-staff', el).value, key = sid + '|' + $('#lf-year', el).value;
+      if (!sid) { $('#lf-remain', el).textContent = '—'; $('#lf-vnote', el).textContent = 'เลือกบุคลากรก่อน'; return; }
+      if (key !== baseKey) { baseKey = key; base = cur(); balDirty = { carry: false, quota: false }; $('#lf-carry', el).value = base.carry; $('#lf-quota', el).value = base.quota; }
+      const carry = Number($('#lf-carry', el).value) || 0, quota = Number($('#lf-quota', el).value) || 0;
+      const isVac = $('#lf-type', el).value === VAC, d = isVac ? Number($('#lf-days', el).value) || 0 : 0;
+      const remain = quota + carry - base.used - d;
+      const out = $('#lf-remain', el);
+      out.textContent = `${fmtDays(remain)} วัน`; out.classList.toggle('neg', remain < 0);
+      $('#lf-vnote', el).textContent = `ลาพักผ่อนในปีนี้ไปแล้ว ${fmtDays(base.used)} วัน${isVac ? ` + รายการนี้ ${fmtDays(d)} วัน` : ' (รายการนี้ไม่ใช่ลาพักผ่อน จึงไม่หักวันคงเหลือ)'}${base.auto && !balDirty.carry ? ' · วันสะสมยกยอดจากปีที่แล้วอัตโนมัติ' : ''}${remain < 0 ? ' · ลาเกินสิทธิ์' : ''}`;
+    };
+    const sync = () => {
+      const a = readDate(el, 'lf-s'), b = readDate(el, 'lf-e');
+      if (a && a !== 'INVALID' && b !== 'INVALID') {
+        const fy = fyOf(a); if (S.meta.years.includes(fy)) $('#lf-year', el).value = fy;
+        const n = workDays(a, b && b >= a ? b : a);
+        $('#lf-hint', el).textContent = `นับวันทำการ (จ.–ศ.) ได้ ${n} วัน ถ้าลาครึ่งวันให้ใส่ 0.5 · ถ้ามีวันหยุดราชการให้หักออก`;
+        if (!touched) $('#lf-days', el).value = n;
+      }
+      paintVac();
+    };
+    $('#lf-days', el).oninput = () => { touched = true; paintVac(); };
+    $('#lf-carry', el).oninput = () => { balDirty.carry = true; paintVac(); };
+    $('#lf-quota', el).oninput = () => { balDirty.quota = true; paintVac(); };
+    ['#lf-s-d', '#lf-s-m', '#lf-s-y', '#lf-e-d', '#lf-e-m', '#lf-e-y', '#lf-type', '#lf-staff', '#lf-year'].forEach(id => $(id, el).addEventListener('change', sync));
+    sync();
+    $('#lf-save', el).onclick = async () => {
+      const startDate = readDate(el, 'lf-s'), endDate = readDate(el, 'lf-e');
+      const rec = { id: l.id, staffId: $('#lf-staff', el).value, type: $('#lf-type', el).value, year: $('#lf-year', el).value, startDate, endDate: endDate && endDate !== startDate ? endDate : '', days: $('#lf-days', el).value.trim(), note: $('#lf-note', el).value.trim() };
+      if (!rec.staffId) return toast('กรุณาเลือกบุคลากร', true);
+      if (!startDate || startDate === 'INVALID') return toast('วันที่เริ่มไม่ถูกต้อง', true);
+      if (endDate === 'INVALID') return toast('วันที่สิ้นสุดไม่ถูกต้อง', true);
+      if (endDate && endDate < startDate) return toast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม', true);
+      if (!(Number(rec.days) > 0)) return toast('กรุณากรอกจำนวนวันลา', true);
+      const bal = {};
+      if (balDirty.carry && Number($('#lf-carry', el).value) !== base.carry) bal.carry = $('#lf-carry', el).value.trim();
+      if (balDirty.quota && Number($('#lf-quota', el).value) !== base.quota) bal.quota = $('#lf-quota', el).value.trim();
+      try {
+        await busy(async () => {
+          await api('saveLeave', { leave: rec });
+          if (Object.keys(bal).length) await api('saveLeaveBalance', Object.assign({ staffId: rec.staffId, year: rec.year }, bal));
+        });
+        m.close(); toast(isNew ? 'บันทึกการลาแล้ว' : 'แก้ไขรายการลาแล้ว'); reload && reload();
+      } catch (e) { }
+    };
+  }
+
+  const rpVac = b => b ? `<h2>วันลาพักผ่อน</h2><table><thead><tr><th class="c">สะสมจากปีที่แล้ว</th><th class="c">สิทธิ์ปีนี้</th><th class="c">ใช้ไปแล้ว</th><th class="c">คงเหลือ</th></tr></thead><tbody><tr><td class="c">${fmtDays(b.carry)} วัน</td><td class="c">${fmtDays(b.quota)} วัน</td><td class="c">${fmtDays(b.used)} วัน</td><td class="c"><b>${fmtDays(b.remain)} วัน</b></td></tr></tbody></table>` : '';
+  function reportLeavePerson(u, list, year, b) {
+    const sm = leaveSummary(list), sorted = list.slice().sort((a, c) => String(a.startDate).localeCompare(String(c.startDate)));
+    const build = () => `<table class="rp-kv"><tr><td>ชื่อ-สกุล</td><td>${esc(fullName(u))}</td></tr><tr><td>ตำแหน่ง</td><td>${esc(u.position || '-')}</td></tr></table>
+      ${rpVac(b)}
+      <h2>สรุปการลา</h2><table><thead><tr>${LEAVE_MAIN.map(t => `<th class="c">${t}<br>(ครั้ง/วัน)</th>`).join('')}<th class="c">ลาอื่น ๆ<br>(ครั้ง/วัน)</th><th class="c">รวมวันลา</th></tr></thead><tbody><tr>
+        ${LEAVE_MAIN.map(t => `<td class="c">${sm[t].n} / ${fmtDays(sm[t].d)}</td>`).join('')}<td class="c">${sm.other.n} / ${fmtDays(sm.other.d)}</td><td class="c"><b>${fmtDays(sm.total)}</b></td></tr></tbody></table>
+      <h2>รายการลา</h2><table><thead><tr><th class="c">ที่</th><th>ประเภท</th><th>วันที่</th><th class="r">จำนวนวัน</th><th>หมายเหตุ</th></tr></thead><tbody>
+      ${sorted.map((l, i) => `<tr><td class="c">${i + 1}</td><td>${esc(l.type)}</td><td>${esc(leaveRange(l))}</td><td class="r">${l.days ? esc(fmtDays(Number(l.days) || 0)) : '-'}</td><td>${esc(l.note || '')}</td></tr>`).join('') || '<tr><td colspan="5" class="c">ไม่มีรายการลา</td></tr>'}
+      </tbody></table>
+      <div class="rp-sign"><div>ลงชื่อ ..................................................<br>( ${esc(fullName(u))} )<br>ผู้ตรวจสอบข้อมูล</div><div>ลงชื่อ ..................................................<br>( .................................................. )<br>งานบุคลากร</div></div>`;
+    openReport({ title: 'รายงานการลา', subtitle: `${fullName(u)} · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})`, build, filename: ['การลา', u.firstName, u.lastName, year].join(' ') });
+  }
+
+  function reportLeaveSummary(rows, year) {
+    const build = () => `<table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th>${LEAVE_MAIN.map(t => `<th class="c">${t}<br>(ครั้ง/วัน)</th>`).join('')}<th class="c">ลาอื่น ๆ<br>(ครั้ง/วัน)</th><th class="c">รวมวันลา</th><th class="c">ลาพักผ่อน<br>สะสมจากปีที่แล้ว</th><th class="c">ลาพักผ่อน<br>คงเหลือ</th></tr></thead><tbody>
+      ${rows.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(fullName(x.s))}</td>${LEAVE_MAIN.map(t => `<td class="c">${x.sm[t].n ? `${x.sm[t].n} / ${fmtDays(x.sm[t].d)}` : '-'}</td>`).join('')}<td class="c">${x.sm.other.n ? `${x.sm.other.n} / ${fmtDays(x.sm.other.d)}` : '-'}</td><td class="c"><b>${x.sm.total ? fmtDays(x.sm.total) : '-'}</b></td><td class="c">${fmtDays(x.b.carry)}</td><td class="c"><b>${fmtDays(x.b.remain)}</b></td></tr>`).join('')}
+      </tbody></table>`;
+    openReport({ title: 'สรุปการลาของบุคลากร', subtitle: `ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})`, build, landscape: true, filename: 'สรุปการลาของบุคลากร ' + year });
+  }
+
   function viewSettings(v) {
     const sel = S.cache.setYear && S.meta.years.includes(S.cache.setYear) ? S.cache.setYear : S.fy;
     const projs = S.meta.projects.filter(p => p.year === sel);
@@ -1258,7 +1498,13 @@
         { id: 'R1', staffId: 'S001', year: '2570', projectId: 'P2', projectName: 'โครงการศึกษาดูงานแหล่งเรียนรู้ต้นแบบ', type: 'ศึกษาดูงาน', title: 'ศึกษาดูงานศูนย์เรียนรู้เศรษฐกิจพอเพียง (ตัวอย่าง)', place: 'ศูนย์เรียนรู้ ต.ตัวอย่าง', organizer: 'สกร.ระดับอำเภอ', startDate: '2026-10-02', endDate: '2026-10-03', hours: '12', knowledge: 'เรียนรู้การจัดการแปลงเกษตรผสมผสานและการทำบัญชีครัวเรือน นำไปปรับใช้ในการจัดกิจกรรมการศึกษาต่อเนื่องให้ผู้เรียนในตำบล', photo1: '', photo2: '' },
         { id: 'R2', kind: 'award', staffId: 'S001', year: '2570', projectId: '', projectName: '', type: 'เกียรติบัตร', level: 'ระดับจังหวัด', title: 'ครู กศน.ตำบลดีเด่น (ตัวอย่าง)', place: 'หอประชุมจังหวัด', organizer: 'สกร.จังหวัด', startDate: '2026-11-16', endDate: '', hours: '', knowledge: '', photo1: '', photo2: '' },
         { id: 'R3', kind: 'speaker', staffId: 'S002', year: '2570', projectId: '', projectName: '', type: 'บรรยาย', title: 'การทำบัญชีครัวเรือน (ตัวอย่าง)', place: 'ศาลาอเนกประสงค์ ม.4', organizer: 'องค์การบริหารส่วนตำบล', audience: 'ผู้สูงอายุ 30 คน', startDate: '2026-12-05', endDate: '', hours: '3', knowledge: 'บรรยายและฝึกปฏิบัติการบันทึกรายรับรายจ่าย', photo1: '', photo2: '' }
-      ]
+      ],
+      leaves: [
+        { id: 'L1', staffId: 'S001', year: '2570', type: 'ลาป่วย', startDate: '2026-10-06', endDate: '2026-10-07', days: '2', note: 'มีใบรับรองแพทย์' },
+        { id: 'L2', staffId: 'S001', year: '2570', type: 'ลากิจส่วนตัว', startDate: '2026-10-09', endDate: '', days: '0.5', note: 'ครึ่งวันเช้า' },
+        { id: 'L4', staffId: 'S002', year: '2570', type: 'ลาพักผ่อน', startDate: '2026-10-12', endDate: '2026-10-14', days: '3', note: '' }
+      ],
+      leaveBals: [{ staffId: 'S001', year: '2570', carry: '5', quota: '' }]
     });
     let db;
     const load = () => { if (db) return db; try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { } return db = db || seed(); };
@@ -1332,6 +1578,17 @@
             (q.photos || []).forEach((ph, i) => { if (ph === 'keep') return; r['photo' + (i + 1)] = ph && ph.data ? ph.data : ''; });
             save(); return ok(r);
           }
+          case 'listLeaves': {
+            let r = (db.leaves || []).slice();
+            if (!isAdmin || q.mine) r = r.filter(x => x.staffId === ses.id); else if (q.staffId) r = r.filter(x => x.staffId === q.staffId);
+            if (q.year) r = r.filter(x => x.year === q.year);
+            return ok(r.sort((a, b) => b.startDate.localeCompare(a.startDate)));
+          }
+          case 'listLeaveBalances': {
+            let r = (db.leaveBals || []).slice();
+            if (!isAdmin || q.mine) r = r.filter(x => x.staffId === ses.id); else if (q.staffId) r = r.filter(x => x.staffId === q.staffId);
+            return ok(r);
+          }
           case 'deleteRecord': { const r = db.records.find(x => x.id === q.id); if (!r || r.staffId !== ses.id) return err('ลบได้เฉพาะรายการของตนเอง'); db.records = db.records.filter(x => x !== r); save(); return ok(true); }
         }
         if (!isAdmin) return err('สำหรับผู้บริหาร/ผู้ดูแลระบบเท่านั้น');
@@ -1345,6 +1602,22 @@
             Object.assign(r, q.status ? { review: q.status, reviewNote: String(q.note || '').trim(), reviewBy: by, reviewAt: new Date().toISOString().slice(0, 19) } : { review: '', reviewNote: '', reviewBy: '', reviewAt: '' });
             save(); return ok(r);
           }
+          case 'saveLeave': {
+            const d = q.leave || {}; db.leaves = db.leaves || [];
+            if (!staff(d.staffId)) return err('กรุณาเลือกบุคลากร');
+            let l = d.id ? db.leaves.find(x => x.id === d.id) : null;
+            if (!l) { l = { id: 'L' + Date.now() }; db.leaves.push(l); }
+            ['staffId', 'year', 'type', 'startDate', 'endDate', 'days', 'note'].forEach(k => l[k] = String(d[k] || ''));
+            save(); return ok(l);
+          }
+          case 'saveLeaveBalance': {
+            db.leaveBals = db.leaveBals || [];
+            let b = db.leaveBals.find(x => x.staffId === q.staffId && x.year === q.year);
+            if (!b) { b = { staffId: q.staffId, year: q.year, carry: '', quota: '' }; db.leaveBals.push(b); }
+            if ('carry' in q) b.carry = String(q.carry ?? ''); if ('quota' in q) b.quota = String(q.quota ?? '');
+            save(); return ok(true);
+          }
+          case 'deleteLeave': db.leaves = (db.leaves || []).filter(x => x.id !== q.id); save(); return ok(true);
           case 'createAccounts': return ok({ created: 0, pending: 0, warnings: [] });
           case 'listAdmins': return ok([{ uid: 'ADMIN', name: 'ผู้ดูแลระบบ (บัญชีแรก)', username: db.admin.user, email: '', self: ses.id === 'ADMIN' }].concat((db.admins || []).map(a => ({ uid: a.uid, name: a.name, username: a.username, email: a.email, self: false }))));
           case 'addAdmin': {
@@ -1361,7 +1634,7 @@
             (q.list || []).forEach(src => { if (!src.id || !src.firstName) return; const s = staff(src.id); if (s) { Object.assign(s, src); updated++; } else { db.staff.push(Object.assign({ pw: '', pwChanged: false }, src)); added++; } });
             save(); return ok({ added, updated, created: added, warnings: ['โหมดทดลอง: ข้อมูลอยู่ในเบราว์เซอร์นี้เท่านั้น'] });
           }
-          case 'deleteStaff': db.staff = db.staff.filter(s => s.id !== q.id); db.records = db.records.filter(r => r.staffId !== q.id); save(); return ok(true);
+          case 'deleteStaff': db.leaves = (db.leaves || []).filter(l => l.staffId !== q.id); db.staff = db.staff.filter(s => s.id !== q.id); db.records = db.records.filter(r => r.staffId !== q.id); save(); return ok(true);
           case 'resetPassword': { const s = staff(q.id); s.pw = ''; s.pwChanged = false; save(); return ok(pub(s)); }
           case 'addYear': { const y = String(q.year); if (!/^25\d\d$/.test(y)) return err('ปีงบประมาณต้องเป็น พ.ศ. 4 หลัก เช่น 2571'); if (db.years.includes(y)) return err('มีปีงบประมาณนี้แล้ว'); db.years.push(y); save(); return ok(meta()); }
           case 'deleteYear': if (db.records.some(r => r.year === q.year)) return err('ลบไม่ได้ มีรายการพัฒนาตนเองในปีนี้อยู่'); db.years = db.years.filter(y => y !== q.year); db.projects = db.projects.filter(p => p.year !== q.year); save(); return ok(meta());

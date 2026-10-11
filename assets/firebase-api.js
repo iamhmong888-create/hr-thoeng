@@ -21,6 +21,7 @@ const REC_FIELDS = ['kind', 'year', 'projectId', 'type', 'title', 'place', 'orga
 // ประเภทรายการ: dev = การพัฒนาตนเอง (รายการเดิมที่ไม่มี kind) · award = โล่/รางวัล · speaker = วิทยากร
 const KINDS = ['dev', 'award', 'speaker'];
 const kindOf = r => KINDS.includes(r && r.kind) ? r.kind : 'dev';
+const LEAVE_FIELDS = ['year', 'type', 'startDate', 'endDate', 'days', 'note'];
 const NO_EMAIL_DOMAIN = 'no-email.local';
 const PREFIXES = ['นางสาว', 'น.ส.', 'นาย', 'นาง', 'ครู'];
 
@@ -150,6 +151,11 @@ export function create(CFG) {
     return { created, pending: all.length - created, warnings };
   }
 
+  function leaveOut(id, r) {
+    const o = { id };
+    ['staffId', ...LEAVE_FIELDS, 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'].forEach(k => o[k] = r[k] === undefined ? '' : String(r[k]));
+    return o;
+  }
   function recOut(id, r) {
     const o = { id };
     ['staffId', ...REC_FIELDS, 'projectName', 'createdAt', 'updatedAt', 'review', 'reviewNote', 'reviewBy', 'reviewAt'].forEach(k => o[k] = r[k] === undefined ? '' : String(r[k]));
@@ -287,6 +293,60 @@ export function create(CFG) {
       return snap.docs.map(x => recOut(x.id, x.data())).sort((a, b) => b.startDate.localeCompare(a.startDate));
     },
 
+    /* ---------- การลา: ครูดูของตนเองได้อย่างเดียว ผู้บริหาร/ผู้ดูแลบันทึก แก้ไข ลบ ---------- */
+    async listLeaves(q) {
+      const c = await me();
+      const cons = [];
+      if (c.role !== 'admin' || q.mine) cons.push(where('staffId', '==', c.staffId || '__none__'));
+      else if (q.staffId) cons.push(where('staffId', '==', q.staffId));
+      if (q.year) cons.push(where('year', '==', String(q.year)));
+      const snap = await getDocs(query(C('leaves'), ...cons));
+      return snap.docs.map(x => leaveOut(x.id, x.data())).sort((a, b) => b.startDate.localeCompare(a.startDate));
+    },
+    async saveLeave(q) {
+      const c = await me(); needAdmin(c);
+      const r = q.leave || {};
+      if (!r.staffId) throw new Error('กรุณาเลือกบุคลากร');
+      await getStaff(r.staffId);
+      if (!r.year) throw new Error('กรุณาเลือกปีงบประมาณ');
+      if (!r.type) throw new Error('กรุณาเลือกประเภทการลา');
+      if (!r.startDate) throw new Error('กรุณาเลือกวันที่');
+      let id = r.id, old = null;
+      if (id) { const s = await getDoc(D('leaves', id)); if (!s.exists()) throw new Error('ไม่พบรายการ'); old = s.data(); }
+      else id = doc(C('leaves')).id;
+      let by = c.name || 'ผู้ดูแลระบบ';
+      if (c.staffId) { const st = await getStaff(c.staffId); by = ([st.prefix, st.firstName].join('') + ' ' + (st.lastName || '')).trim(); }
+      const out = { staffId: String(r.staffId), createdAt: old ? old.createdAt || nowISO() : nowISO(), createdBy: old ? old.createdBy || by : by, updatedAt: nowISO(), updatedBy: by };
+      LEAVE_FIELDS.forEach(k => out[k] = String(r[k] === undefined || r[k] === null ? '' : r[k]).trim());
+      await setDoc(D('leaves', id), out);
+      return leaveOut(id, out);
+    },
+    // วันลาพักผ่อน: สิทธิ์ต่อปี (ค่าเริ่มต้น 10) และวันสะสมจากปีที่แล้ว (ว่าง = คำนวณอัตโนมัติ)
+    async listLeaveBalances(q) {
+      const c = await me();
+      const cons = [];
+      if (c.role !== 'admin' || q.mine) cons.push(where('staffId', '==', c.staffId || '__none__'));
+      else if (q.staffId) cons.push(where('staffId', '==', q.staffId));
+      const snap = await getDocs(query(C('leaveBalances'), ...cons));
+      return snap.docs.map(x => { const d = x.data(); return { id: x.id, staffId: String(d.staffId || ''), year: String(d.year || ''), carry: d.carry === undefined ? '' : String(d.carry), quota: d.quota === undefined ? '' : String(d.quota) }; });
+    },
+    async saveLeaveBalance(q) {
+      needAdmin(await me());
+      const staffId = String(q.staffId || ''), year = String(q.year || '');
+      if (!staffId || !year) throw new Error('ข้อมูลไม่ครบ');
+      const num = v => { const t = String(v === undefined || v === null ? '' : v).trim(); if (t === '') return ''; const n = Number(t); if (isNaN(n)) throw new Error('จำนวนวันต้องเป็นตัวเลข'); return String(n); };
+      const up = { staffId, year, updatedAt: nowISO() };
+      if ('carry' in q) up.carry = num(q.carry);
+      if ('quota' in q) up.quota = num(q.quota);
+      await setDoc(D('leaveBalances', `${year}_${staffId}`), up, { merge: true });
+      return true;
+    },
+    async deleteLeave(q) {
+      needAdmin(await me());
+      const b = writeBatch(db); b.delete(D('leaves', q.id)); await b.commit();
+      return true;
+    },
+
     async getPhotos(q) {
       await me();
       const s = await getDoc(D('photos', q.id));
@@ -373,8 +433,11 @@ export function create(CFG) {
       needAdmin(await me());
       const s = await getStaff(q.id);
       const recs = await getDocs(query(C('records'), where('staffId', '==', q.id)));
+      const lvs = await getDocs(query(C('leaves'), where('staffId', '==', q.id)));
       const b = writeBatch(db);
       recs.docs.forEach(x => { b.delete(x.ref); b.delete(D('photos', x.id)); });
+      lvs.docs.forEach(x => b.delete(x.ref));
+      (await getDocs(query(C('leaveBalances'), where('staffId', '==', q.id)))).docs.forEach(x => b.delete(x.ref));
       if (s.uid) { b.delete(D('users', s.uid)); b.delete(D('logins', nameKey(s.firstName))); }
       b.delete(D('staff', q.id));
       await b.commit();

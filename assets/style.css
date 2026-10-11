@@ -61,6 +61,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.sm { padding: .25em .7em; font-size: .875rem; }
 .btn:disabled { opacity: .55; cursor: not-allowed; }
 
+[hidden] { display: none !important; }
 .field { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
 .field > span { font-size: .875rem; color: var(--muted); font-weight: 500; }
 .field .req { color: var(--bad); }
@@ -248,3 +249,19 @@ td.r, th.r { text-align: right; }
   .rec, .panel, .stat { break-inside: avoid; box-shadow: none; }
   main { padding: 0; }
 }
+
+/* การลา: วันลาพักผ่อน */
+.vac-box h3 { margin: 0 0 .6rem; }
+.vac-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .6rem; }
+.vac-row > div { background: var(--surface-2); border-radius: 8px; padding: .55rem .8rem; }
+.vac-row .k { font-size: .82rem; color: var(--muted); }
+.vac-row .v { font-family: var(--font-display); font-size: 1.45rem; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.vac-row .v small { font-size: .8rem; color: var(--muted); font-family: var(--font-body); }
+.vac-row .vac-remain { background: var(--good-soft); }
+.vac-row .vac-remain .v { color: var(--good); }
+.vac-row .vac-remain.neg { background: var(--bad-soft); }
+.vac-row .vac-remain.neg .v { color: var(--bad); }
+.vac-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .6rem .9rem; padding: .8rem; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface-2); }
+.vac-form .wide { grid-column: 1 / -1; }
+.vac-out { font-family: var(--font-display); font-size: 1.35rem; color: var(--good); padding: .25rem 0; font-variant-numeric: tabular-nums; }
+.vac-out.neg { color: var(--bad); }
