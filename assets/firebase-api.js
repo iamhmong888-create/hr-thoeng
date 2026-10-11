@@ -511,6 +511,75 @@ export function create(CFG) {
       await b.commit();
       return actions.listAdmins();
     },
+    /* ---------- สำรอง / กู้คืนข้อมูล (ผู้ดูแลระบบ) ---------- */
+    async backupData(q) {
+      needAdmin(await me());
+      const prog = typeof q.onProgress === 'function' ? q.onProgress : () => { };
+      const cols = ['staff', 'users', 'records', 'leaves', 'leaveBalances'].concat(q.photos === false ? [] : ['photos']);
+      const data = {};
+      for (let i = 0; i < cols.length; i++) {
+        prog(`กำลังอ่านข้อมูล ${i + 1}/${cols.length + 1}…`);
+        data[cols[i]] = {};
+        (await getDocs(C(cols[i]))).docs.forEach(d => { data[cols[i]][d.id] = d.data(); });
+      }
+      prog('กำลังอ่านการตั้งค่า…');
+      const meta = await getDoc(D('config', 'meta')), setup = await getDoc(D('config', 'setup'));
+      data.config = { meta: meta.exists() ? meta.data() : { years: [], projects: [] }, setup: setup.exists() ? setup.data() : {} };
+      return data;
+    },
+    // กู้คืน: นำเอกสารในไฟล์กลับเข้าระบบ ไม่ลบข้อมูลที่มีอยู่
+    // overwrite=false: เพิ่มเฉพาะข้อมูลที่หายไป · overwrite=true: เขียนทับข้อมูลบุคลากร บัญชี การลา และปีงบ/โครงการ ด้วยข้อมูลในไฟล์
+    // รายการพัฒนาตนเอง/โล่/วิทยากร และรูป: เพิ่มเฉพาะที่หายไปเสมอ (ไม่เขียนทับสิ่งที่ครูแก้ไขไว้)
+    async restoreData(q) {
+      needAdmin(await me());
+      const d = q.data || {}, over = !!q.overwrite;
+      const prog = typeof q.onProgress === 'function' ? q.onProgress : () => { };
+      const ops = [], count = {};
+      const have = async col => new Set((await getDocs(C(col))).docs.map(x => x.id));
+      const plan = async (col, always) => {
+        const src = d[col] || {}; const ex = await have(col); count[col] = 0;
+        Object.keys(src).forEach(id => {
+          if (ex.has(id) && !(over && !always)) return;
+          let doc = src[id];
+          if (col === 'records' && !ex.has(id)) doc = Object.assign({}, doc, { restoredAt: nowISO() });
+          ops.push({ ref: D(col, id), doc }); count[col]++;
+        });
+      };
+      prog('กำลังตรวจสอบข้อมูลในระบบ…');
+      for (const col of ['staff', 'users', 'leaves', 'leaveBalances']) await plan(col, false);
+      await plan('records', true);
+      if (d.photos) {
+        const recNow = await have('records');
+        const src = d.photos, ex = await have('photos'); count.photos = 0;
+        Object.keys(src).forEach(id => { if (!ex.has(id) && (recNow.has(id) || (d.records || {})[id])) { ops.push({ ref: D('photos', id), doc: src[id] }); count.photos++; } });
+      }
+      // ปีงบประมาณ/โครงการ
+      const cm = (d.config || {}).meta;
+      if (cm) {
+        const m = await getMeta();
+        const years = over ? (cm.years || []).map(String) : [...new Set(m.years.concat((cm.years || []).map(String)))];
+        const projects = over ? (cm.projects || []) : m.projects.concat((cm.projects || []).filter(p => !m.projects.some(x => x.id === String(p.id))));
+        ops.push({ ref: D('config', 'meta'), doc: { years, projects: projects.map(p => ({ id: String(p.id), year: String(p.year), name: String(p.name) })) } });
+      }
+      // ชื่อผู้ใช้ → อีเมล (สร้างใหม่จากข้อมูลบุคลากรและบัญชีผู้ดูแล)
+      const logins = {};
+      Object.values(d.staff || {}).forEach(st => { if (st.uid && st.authEmail && st.firstName) logins[nameKey(st.firstName)] = st.authEmail; });
+      Object.values(d.users || {}).forEach(u => { if (!u.staffId && u.role === 'admin') { const em = u.email || (u.username ? '' : ((d.config || {}).setup || {}).adminEmail); if (em) logins[nameKey(u.username || 'admin')] = em; } });
+      for (const k of Object.keys(logins)) { if (over || !(await getDoc(D('logins', k))).exists()) ops.push({ ref: D('logins', k), doc: { email: logins[k] } }); }
+      // บันทึกเป็นชุด (ไม่เกิน 400 รายการ / ประมาณ 8 MB ต่อชุด)
+      let i = 0, done = 0;
+      while (i < ops.length) {
+        const b = writeBatch(db); let n = 0, size = 0;
+        while (i < ops.length && n < 400) {
+          const sz = JSON.stringify(ops[i].doc).length;
+          if (n && size + sz > 8e6) break;
+          b.set(ops[i].ref, ops[i].doc); n++; size += sz; i++;
+        }
+        await b.commit(); done += n;
+        prog(`กำลังกู้คืน… ${done}/${ops.length}`);
+      }
+      return { count, total: ops.length };
+    },
     async deleteAdmin(q) {
       const c = await me(); needAdmin(c);
       if (q.uid === c.uid) throw new Error('ลบบัญชีที่กำลังใช้งานอยู่ไม่ได้');

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261011f';
+  const APP_VERSION = '20261011g';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -1417,6 +1417,60 @@
     openReport({ title: 'สรุปการลาของบุคลากร', subtitle: `ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})`, build, landscape: true, filename: 'สรุปการลาของบุคลากร ' + year });
   }
 
+  /* ---------------- สำรอง / กู้คืนข้อมูล ---------------- */
+  const BK_TAG = 'hr-thoeng-backup';
+  const BK_LABEL = { staff: 'บุคลากร (คน)', users: 'บัญชีเข้าสู่ระบบ', records: 'รายการพัฒนาตนเอง/โล่/วิทยากร', photos: 'รูปหลักฐาน (รายการ)', leaves: 'รายการลา', leaveBalances: 'วันลาสะสม' };
+  const bkCounts = d => Object.keys(BK_LABEL).filter(k => d[k]).map(k => `<tr><td>${BK_LABEL[k]}</td><td class="r num">${Object.keys(d[k]).length.toLocaleString('th-TH')}</td></tr>`).join('');
+  async function downloadBackup(photos) {
+    const ov = pdfOverlay('กำลังเตรียมไฟล์สำรอง…');
+    try {
+      const data = await api('backupData', { photos, onProgress: t => ov.set(t) });
+      const now = new Date(), p2 = n => String(n).padStart(2, '0');
+      const stamp = `${now.getFullYear() + 543}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}_${p2(now.getHours())}${p2(now.getMinutes())}`;
+      const file = { app: BK_TAG, version: 1, org: CFG.ORG_NAME, createdAt: now.toISOString(), createdBy: fullName(S.user), photos: !!data.photos, data };
+      const blob = new Blob([JSON.stringify(file)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `สำรองข้อมูลบุคลากร_${stamp}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      ov.close();
+      modal({ title: 'ดาวน์โหลดไฟล์สำรองแล้ว', size: 'sm', body: `<p style="margin:0">ไฟล์ <b>${esc(a.download)}</b> (${(blob.size / 1048576).toFixed(1)} MB)</p>
+        <div class="table-wrap"><table><tbody>${bkCounts(data)}</tbody></table></div>
+        <p class="small muted" style="margin:0">เก็บไฟล์ไว้ในที่ปลอดภัย เช่น Google Drive ของหน่วยงาน ไฟล์นี้มีข้อมูลส่วนบุคคล</p>`, foot: '<button class="btn primary" data-close>ตกลง</button>' });
+    } catch (e) { ov.close(); toast(e.message || 'สร้างไฟล์สำรองไม่สำเร็จ', true); }
+  }
+  async function restoreBackup(f, done) {
+    let file;
+    try { file = JSON.parse(await f.text()); } catch (e) { return toast('อ่านไฟล์ไม่ได้ กรุณาเลือกไฟล์สำรองที่ดาวน์โหลดจากระบบนี้ (.json)', true); }
+    if (!file || file.app !== BK_TAG || !file.data) return toast('ไฟล์นี้ไม่ใช่ไฟล์สำรองของระบบงานบุคลากร', true);
+    const d = file.data, when = new Date(file.createdAt);
+    const whenTxt = isNaN(when) ? '-' : `${when.getDate()} ${TH_M[when.getMonth()]} ${when.getFullYear() + 543} เวลา ${String(when.getHours()).padStart(2, '0')}:${String(when.getMinutes()).padStart(2, '0')} น.`;
+    const m = modal({
+      title: 'กู้คืนจากไฟล์สำรอง',
+      body: `<div class="notice info"><div class="grow">ไฟล์สำรองเมื่อ <b>${esc(whenTxt)}</b>${file.createdBy ? ` โดย ${esc(file.createdBy)}` : ''}${file.photos ? '' : ' · ไฟล์นี้ไม่มีรูปภาพ'}</div></div>
+        <div class="table-wrap"><table><thead><tr><th>ข้อมูลในไฟล์</th><th class="r">จำนวน</th></tr></thead><tbody>${bkCounts(d)}</tbody></table></div>
+        <div><b>ระบบจะทำอะไร</b><ul style="margin:.3rem 0 0;padding-left:1.2rem">
+          <li>นำข้อมูลที่<b>หายไป</b>จากระบบกลับมาจากไฟล์ (เช่น บุคลากรหรือรายการที่ถูกลบ)</li>
+          <li><b>ไม่ลบ</b>ข้อมูลที่เพิ่มเข้ามาหลังวันที่สำรอง</li>
+          <li>รายการพัฒนาตนเอง โล่/รางวัล วิทยากร ที่ยังอยู่ในระบบ จะไม่ถูกเขียนทับ (คงฉบับที่ครูแก้ไขล่าสุด)</li>
+          <li>รหัสผ่านไม่อยู่ในไฟล์สำรอง ครูใช้รหัสผ่านเดิมเข้าระบบได้ตามปกติ</li></ul></div>
+        <label class="check"><input type="checkbox" id="rs-over"> เขียนทับข้อมูลบุคลากร บัญชี การลา และปีงบ/โครงการ ที่มีอยู่ ด้วยข้อมูลในไฟล์ (ใช้เมื่อข้อมูลเหล่านี้ถูกแก้ผิด)</label>`,
+      foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn danger" id="rs-ok">กู้คืนข้อมูล</button>`
+    });
+    $('#rs-ok', m.el).onclick = async () => {
+      const over = $('#rs-over', m.el).checked;
+      if (!(await confirmBox(`ยืนยันกู้คืนข้อมูลจากไฟล์สำรองเมื่อ ${whenTxt}${over ? ' และเขียนทับข้อมูลบุคลากร บัญชี การลา และปีงบ/โครงการที่มีอยู่' : ''}?`, 'กู้คืนข้อมูล'))) return;
+      m.close();
+      const ov = pdfOverlay('กำลังกู้คืนข้อมูล…');
+      try {
+        const r = await api('restoreData', { data: d, overwrite: over, onProgress: t => ov.set(t) });
+        ov.close();
+        try { S.meta = await api('meta'); } catch (e) { }
+        const rows = Object.keys(BK_LABEL).filter(k => r.count && r.count[k]).map(k => `<tr><td>${BK_LABEL[k]}</td><td class="r num">${r.count[k]}</td></tr>`).join('');
+        modal({ title: 'กู้คืนข้อมูลเรียบร้อย', size: 'sm', body: rows ? `<p style="margin:0">นำข้อมูลกลับเข้าระบบแล้ว:</p><div class="table-wrap"><table><tbody>${rows}</tbody></table></div>` : '<p style="margin:0">ข้อมูลในระบบครบอยู่แล้ว ไม่มีข้อมูลที่ต้องกู้คืน</p>', foot: '<button class="btn primary" data-close>ตกลง</button>' });
+        done && done();
+      } catch (e) { ov.close(); toast(e.message || 'กู้คืนไม่สำเร็จ', true); }
+    };
+  }
+
   function viewSettings(v) {
     const sel = S.cache.setYear && S.meta.years.includes(S.cache.setYear) ? S.cache.setYear : S.fy;
     const projs = S.meta.projects.filter(p => p.year === sel);
@@ -1439,6 +1493,14 @@
         <p style="margin:0 0 .8rem">ผู้ดูแลระบบทุกบัญชีเห็นข้อมูลครูทุกคน และจัดการปีงบ โครงการ และบุคลากรได้เท่ากัน เหมาะสำหรับ ผอ. และหัวหน้างานบุคลากร</p>
         <div id="adm-list"><div class="muted small">กำลังโหลด…</div></div>
         <div style="margin-top:.8rem"><button class="btn primary" id="adm-add">+ เพิ่มบัญชีผู้ดูแลระบบ</button></div>
+      </section>
+      <section class="panel" id="backup-panel"><h3>สำรองและกู้คืนข้อมูล</h3>
+        <p style="margin:0 0 .8rem">ดาวน์โหลดไฟล์สำรองเก็บไว้เป็นระยะ (เช่น ทุกสิ้นเดือน) ไฟล์มีข้อมูลบุคลากร รายการพัฒนาตนเอง โล่/รางวัล วิทยากร การลา และปีงบ/โครงการ ณ วันที่ดาวน์โหลด
+          <b>ไฟล์มีข้อมูลส่วนบุคคล</b> เก็บไว้ในที่ปลอดภัย ห้ามอัปโหลดขึ้น GitHub หรือส่งในกลุ่มแชท</p>
+        <div class="toolbar"><button class="btn primary" id="bk-down">ดาวน์โหลดไฟล์สำรอง</button>
+          <label class="check"><input type="checkbox" id="bk-photos" checked> รวมรูปภาพหลักฐาน (ไฟล์ใหญ่ขึ้น)</label></div>
+        <div class="toolbar" style="margin-top:.8rem"><label class="btn" for="bk-file">กู้คืนจากไฟล์สำรอง</label><input type="file" id="bk-file" accept=".json,application/json" hidden>
+          <span class="small muted">ใช้เฉพาะเมื่อข้อมูลเสียหายหรือถูกลบผิด ระบบถามยืนยันก่อนทุกครั้ง</span></div>
       </section>
       <section class="panel"><h3>นำเข้าข้อมูลบุคลากรและสร้างบัญชีเข้าสู่ระบบ</h3>
         <p style="margin:0 0 .8rem">เลือกไฟล์ <b>staff_import.json</b> ระบบจะบันทึกข้อมูลบุคลากร และสร้างบัญชีให้ทุกคน (ชื่อผู้ใช้ = ชื่อจริง, รหัสผ่าน = เบอร์โทร) ใช้เวลาประมาณ 1 วินาทีต่อคน นำเข้าซ้ำได้ ข้อมูลเดิมที่รหัสตรงกันจะถูกอัปเดต</p>
@@ -1490,6 +1552,8 @@
       try { list = JSON.parse(await f.text()); if (!Array.isArray(list)) throw 0; } catch (err) { return toast('ไฟล์ไม่ถูกต้อง ต้องเป็นไฟล์ staff_import.json', true); }
       try { showImport(await busy(() => api('importStaff', { list }))); toast('นำเข้าเรียบร้อย'); } catch (err) { }
     };
+    $('#bk-down').onclick = () => downloadBackup($('#bk-photos').checked);
+    $('#bk-file').onchange = async e => { const f = e.target.files[0]; e.target.value = ''; if (f) restoreBackup(f, () => { S.cache = {}; viewSettings(v); }); };
     const ia = $('#im-acc'); if (ia) ia.onclick = async () => { try { showImport(await busy(() => api('createAccounts'))); } catch (err) { } };
     const upd = meta => { S.meta = meta; viewSettings(v); };
     $('#fy-add').onclick = async () => { const y = $('#fy-new').value.trim(); if (!y) return toast('กรอกปี พ.ศ. ก่อน', true); try { upd(await busy(() => api('addYear', { year: y }))); toast('เพิ่มปีงบประมาณ ' + y + ' แล้ว'); } catch (e) { } };
@@ -1654,6 +1718,19 @@
             save(); return ok(true);
           }
           case 'deleteLeave': db.leaves = (db.leaves || []).filter(x => x.id !== q.id); save(); return ok(true);
+          case 'backupData': {
+            const map = (arr, key = 'id') => Object.fromEntries((arr || []).map(x => [x[key], x]));
+            return ok({ staff: map(db.staff), records: map(db.records), leaves: map(db.leaves), leaveBalances: Object.fromEntries((db.leaveBals || []).map(b => [b.year + '_' + b.staffId, b])), config: { meta: meta() } });
+          }
+          case 'restoreData': {
+            const d = q.data || {}, over = !!q.overwrite, count = {};
+            const put = (col, arr, key) => { count[col] = 0; Object.entries(d[col] || {}).forEach(([id, doc]) => { const i = arr.findIndex(x => key(x) === id); if (i < 0) { arr.push(doc); count[col]++; } else if (over && col !== 'records') { arr[i] = doc; count[col]++; } }); };
+            put('staff', db.staff, x => x.id); put('records', db.records, x => x.id);
+            db.leaves = db.leaves || []; put('leaves', db.leaves, x => x.id);
+            db.leaveBals = db.leaveBals || []; put('leaveBalances', db.leaveBals, x => x.year + '_' + x.staffId);
+            const cm = (d.config || {}).meta; if (cm) { db.years = [...new Set(db.years.concat(cm.years || []))]; (cm.projects || []).forEach(p => { if (!db.projects.some(x => x.id === p.id)) db.projects.push(p); }); }
+            save(); return ok({ count, total: Object.values(count).reduce((a, b) => a + b, 0) });
+          }
           case 'createAccounts': return ok({ created: 0, pending: 0, warnings: [] });
           case 'listAdmins': return ok([{ uid: 'ADMIN', name: 'ผู้ดูแลระบบ (บัญชีแรก)', username: db.admin.user, email: '', self: ses.id === 'ADMIN' }].concat((db.admins || []).map(a => ({ uid: a.uid, name: a.name, username: a.username, email: a.email, self: false }))));
           case 'addAdmin': {
