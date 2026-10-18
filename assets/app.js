@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261018a';
+  const APP_VERSION = '20261018b';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -33,7 +33,8 @@
       head: 'การพัฒนาตนเอง', desc: 'ศึกษาดูงาน อบรม ประชุมสัมมนา และการพัฒนาตนเองตามโครงการพัฒนาบุคลากร', add: '+ เพิ่มรายการพัฒนาตนเอง', addTitle: 'เพิ่มรายการพัฒนาตนเอง', editTitle: 'แก้ไขรายการพัฒนาตนเอง',
       adminHead: 'รายการพัฒนาตนเองของบุคลากร', types: DEV_TYPES, typeLabel: 'ประเภทการพัฒนา', typeFallback: 'พัฒนาตนเอง',
       titleLabel: 'ชื่อเรื่อง / หลักสูตร / กิจกรรม', titlePh: 'เช่น ศึกษาดูงานแหล่งเรียนรู้เศรษฐกิจพอเพียง', placeLabel: 'สถานที่', orgLabel: 'หน่วยงานผู้จัด', orgShort: 'จัดโดย',
-      detailLabel: 'ความรู้ที่ได้รับ / การนำไปใช้', detailShort: 'ความรู้ที่ได้รับ', detailPh: 'สรุปความรู้ ทักษะ หรือแนวคิดที่ได้รับ และการนำไปประยุกต์ใช้ในการปฏิบัติงาน', detailReq: true,
+      detailLabel: 'ความรู้ที่ได้รับ', detailShort: 'ความรู้ที่ได้รับ', detailPh: 'สรุปความรู้ ทักษะ หรือแนวคิดที่ได้รับจากการพัฒนาตนเอง', detailReq: true,
+      apply: true, applyLabel: 'การนำไปใช้', applyPh: 'นำความรู้ไปประยุกต์ใช้ในการปฏิบัติงาน/การจัดการเรียนรู้อย่างไร',
       project: true, hours: true, range: true, dateLabel: 'วันที่เริ่ม (วัน เดือน พ.ศ.)',
       empty: 'กด “เพิ่มรายการพัฒนาตนเอง” เพื่อบันทึกการศึกษาดูงานหรือการพัฒนาตนเอง',
       report: 'รายงานการพัฒนาตนเอง', reportAll: 'รายงานการพัฒนาตนเองของบุคลากร', file: 'การพัฒนาตนเอง'
@@ -508,7 +509,7 @@
     const mode = opts.mode || 'own';
     const k = kindOf(r), K = KIND[k];
     const ph = ['photo1', 'photo2'].map((f, i) => r[f] ? `<img class="thumb" loading="lazy" src="${esc(photoUrl(r[f]) || BLANK)}" data-full="${esc(photoUrl(r[f]))}" ${/^fs:/.test(r[f]) ? `data-fs="${esc(r[f])}"` : ''} alt="รูปหลักฐาน ${i + 1}: ${esc(r.title)}">` : `<div class="thumb none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
-    const long = (r.knowledge || '').length > 260;
+    const long = (r.knowledge || '').length + (r.apply || '').length > 260;
     const info = [
       K.project ? `<span><b class="lbl">โครงการ:</b> ${esc(r.projectName || '—')}</span>` : '',
       r.organizer ? `<span><b class="lbl">${K.orgShort}:</b> ${esc(r.organizer)}</span>` : '',
@@ -523,6 +524,8 @@
         ${info ? `<div class="meta">${info}</div>` : ''}
         ${K.detailReq || r.knowledge ? `<div class="small" style="margin-top:.2rem"><b class="lbl">${K.detailShort}</b></div>
         <div class="know ${long ? 'clamp' : ''}">${esc(r.knowledge || '—')}</div>` : ''}
+        ${K.apply && r.apply ? `<div class="small" style="margin-top:.2rem"><b class="lbl">${K.applyLabel}</b></div>
+        <div class="know ${long ? 'clamp' : ''}">${esc(r.apply)}</div>` : ''}
         ${long ? `<button class="btn ghost sm no-print" data-more style="align-self:flex-start">อ่านทั้งหมด</button>` : ''}
         ${reviewBox(r)}
       </div>
@@ -588,7 +591,7 @@
     hydratePhotos(root);
     $$('.rec', root).forEach(el => {
       const r = list.find(x => x.id === el.dataset.id);
-      const more = $('[data-more]', el); if (more) more.onclick = () => { $('.know', el).classList.toggle('clamp'); more.textContent = $('.know', el).classList.contains('clamp') ? 'อ่านทั้งหมด' : 'ย่อ'; };
+      const more = $('[data-more]', el); if (more) more.onclick = () => { const open = $('.know', el).classList.contains('clamp'); $$('.know', el).forEach(k => k.classList.toggle('clamp', !open)); more.textContent = open ? 'ย่อ' : 'อ่านทั้งหมด'; };
       const ed = $('[data-edit]', el); if (ed) ed.onclick = async () => { try { await busy(() => loadPhotos([r])); } catch (e) { } recordForm(r, reload, kindOf(r)); };
       const rv = $('[data-review]', el); if (rv) rv.onclick = () => reviewForm(r, el.dataset.who, reload);
       const dl = $('[data-del]', el); if (dl) dl.onclick = async () => {
@@ -630,7 +633,7 @@
     try { list = ofKind(await busy(() => api('listRecords', { year: S.fy, mine: true })), kind); } catch (e) { return; }
     if (!box.isConnected) return;
     const projs = S.meta.projects.filter(p => p.year === S.fy);
-    const projName = id => id === 'OTHER' ? 'อื่น ๆ (นอกโครงการ)' : ((projs.find(p => p.id === id) || {}).name || '');
+    const projName = id => id === 'OTHER' ? 'โครงการอื่น ๆ' : ((projs.find(p => p.id === id) || {}).name || '');
     if (!K.project || (S.devProj && !projName(S.devProj))) S.devProj = '';
     const shown = S.devProj ? list.filter(r => r.projectId === S.devProj) : list;
     box.innerHTML = `
@@ -639,7 +642,7 @@
         <div class="actions"><button class="btn" id="dev-pdf">ดู PDF${S.devProj ? ' โครงการนี้' : ''}</button><button class="btn accent" id="dev-add">${K.add}</button></div></div>
       ${K.project ? `<div class="toolbar no-print"><label class="field" style="flex:1 1 320px"><span>แสดงเฉพาะโครงการ</span><select id="dev-proj">
         <option value="">ทุกโครงการ (${list.length} รายการ)</option>
-        ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map((p, i) => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${p.id === 'OTHER' ? '' : (i + 1) + '. '}${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
+        ${projs.concat(list.some(r => r.projectId === 'OTHER') ? [{ id: 'OTHER', name: 'โครงการอื่น ๆ' }] : []).map((p, i) => `<option value="${esc(p.id)}" ${p.id === S.devProj ? 'selected' : ''}>${p.id === 'OTHER' ? '' : (i + 1) + '. '}${esc(p.name)} (${list.filter(r => r.projectId === p.id).length} รายการ)</option>`).join('')}
       </select></label></div>` : ''}
       ${list.some(r => r.review === 'revise') ? `<div class="notice revise-alert"><div class="grow"><b>มี ${list.filter(r => r.review === 'revise').length} รายการที่ผู้บริหารส่งกลับให้แก้ไข</b> อ่านความเห็นในรายการ แล้วกด “แก้ไข” เพื่อปรับปรุง เมื่อบันทึกแล้วสถานะจะกลับเป็น “รอตรวจ”</div></div>` : ''}
       <div class="recs">${shown.length ? shown.map(r => recCard(r, { mode: 'own' })).join('') : list.length ? '<div class="empty-state">ยังไม่มีรายการในโครงการนี้</div>' : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>${K.empty}</div>`}</div>`;
@@ -675,14 +678,16 @@
     const photos = [r.photo1 ? 'keep' : null, r.photo2 ? 'keep' : null];
     const previews = [photoUrl(r.photo1), photoUrl(r.photo2)];
     const projOpts = y => S.meta.projects.filter(p => p.year === y).map((p, i) => `<option value="${esc(p.id)}" ${p.id === r.projectId ? 'selected' : ''}>${i + 1}. ${esc(p.name)}</option>`).join('')
-      + `<option value="OTHER" ${r.projectId === 'OTHER' ? 'selected' : ''}>อื่น ๆ (นอกโครงการ / พัฒนาตนเอง)</option>`;
+      + `<option value="OTHER" ${r.projectId === 'OTHER' ? 'selected' : ''}>โครงการอื่น ๆ (พิมพ์ชื่อโครงการเอง)</option>`;
+    const applyReq = K.apply && !(r.id && !r.apply); // รายการเก่าที่บันทึกรวมไว้ช่องเดียว ไม่บังคับกรอกช่องการนำไปใช้
     const types = K.types.concat(r.type && !K.types.includes(r.type) ? [r.type] : []);
     const m = modal({
       title: isNew ? K.addTitle : K.editTitle,
       body: `${r.review === 'approved' ? '<div class="notice info"><div class="grow">รายการนี้ผู้บริหารตรวจแล้ว ถ้าบันทึกการแก้ไข สถานะจะกลับเป็น “รอตรวจ”</div></div>' : ''}${r.review === 'revise' ? `<div class="review-note revise"><b>สิ่งที่ต้องแก้ไข</b><div>${esc(r.reviewNote || '')}</div></div>` : ''}
       <div class="grid">
         <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('rf-year', r.year || S.fy)}</label>
-        ${K.project ? `<label class="field"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>` : ''}
+        ${K.project ? `<label class="field"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>
+        <label class="field wide" id="rf-other-f"><span>ชื่อโครงการ <span class="req">*</span></span><input type="text" id="rf-other" value="${esc(r.otherProject || (r.projectId === 'OTHER' && r.projectName !== 'โครงการอื่น ๆ' && r.projectName !== 'อื่น ๆ (นอกโครงการ)' ? r.projectName || '' : ''))}" placeholder="พิมพ์ชื่อโครงการที่เข้าร่วม"></label>` : ''}
         <label class="field"><span>${K.typeLabel} <span class="req">*</span></span><select id="rf-type">${types.map(t => `<option ${t === r.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
         ${K.level ? `<label class="field"><span>ระดับรางวัล <span class="req">*</span></span><select id="rf-level">${AWARD_LEVELS.map(t => `<option ${t === r.level ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
         ${K.hours ? `<label class="field"><span>จำนวนชั่วโมง</span><input type="number" id="rf-hours" min="0" step="0.5" value="${esc(r.hours || '')}" placeholder="เช่น 6"></label>` : ''}
@@ -692,7 +697,8 @@
         ${K.audience ? `<label class="field wide"><span>กลุ่มผู้เข้าร่วม / จำนวน</span><input type="text" id="rf-aud" value="${esc(r.audience || '')}" placeholder="เช่น ผู้เรียน กศน. ตำบลงิม 30 คน"></label>` : ''}
         <div class="wide dates"><div class="field"><span>${K.dateLabel} <span class="req">*</span></span>${dateSel('rf-s', r.startDate || todayISO)}</div>
         ${K.range ? `<div class="field"><span>ถึงวันที่ (ถ้ามีหลายวัน)</span>${dateSel('rf-e', r.endDate, true)}</div>` : ''}</div>
-        <label class="field wide"><span>${K.detailLabel}${K.detailReq ? ' <span class="req">*</span>' : ''}</span><textarea id="rf-know" rows="${K.detailReq ? 6 : 4}" placeholder="${esc(K.detailPh)}">${esc(r.knowledge || '')}</textarea></label>
+        <label class="field wide"><span>${K.detailLabel}${K.detailReq ? ' <span class="req">*</span>' : ''}</span><textarea id="rf-know" rows="${K.apply ? 4 : K.detailReq ? 6 : 4}" placeholder="${esc(K.detailPh)}">${esc(r.knowledge || '')}</textarea></label>
+        ${K.apply ? `<label class="field wide"><span>${K.applyLabel}${applyReq ? ' <span class="req">*</span>' : ''}</span><textarea id="rf-apply" rows="4" placeholder="${esc(K.applyPh)}">${esc(r.apply || '')}</textarea></label>` : ''}
       </div>
       <div class="field"><span>รูปภาพหลักฐาน (2 รูป)</span>
         <div class="photo-pick">${[0, 1].map(i => `<div class="pp" data-i="${i}"><div class="pv"></div><div class="row"><label class="btn sm" for="rf-ph${i}">เลือกรูปที่ ${i + 1}</label><input type="file" accept="image/*" id="rf-ph${i}"><button type="button" class="btn sm danger" data-rm>ลบรูป</button></div></div>`).join('')}</div>
@@ -700,7 +706,8 @@
       foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="rf-save">บันทึกรายการ</button>`
     });
     const el = m.el;
-    if (K.project) $('#rf-year', el).onchange = e => { $('#rf-proj', el).innerHTML = projOpts(e.target.value); };
+    const syncOther = () => { const f = $('#rf-other-f', el); if (f) f.hidden = $('#rf-proj', el).value !== 'OTHER'; };
+    if (K.project) { $('#rf-year', el).onchange = e => { $('#rf-proj', el).innerHTML = projOpts(e.target.value); syncOther(); }; $('#rf-proj', el).onchange = syncOther; syncOther(); }
     const paint = i => {
       const pv = $(`.pp[data-i="${i}"] .pv`, el);
       pv.innerHTML = previews[i] ? `<img src="${esc(previews[i])}" alt="ตัวอย่างรูปที่ ${i + 1}">` : `<div class="ph">ยังไม่มีรูปที่ ${i + 1}</div>`;
@@ -725,13 +732,16 @@
       const rec = {
         id: r.id, staffId: r.staffId, kind, year: val('#rf-year'), projectId: K.project ? val('#rf-proj') : '', type: val('#rf-type'), level: K.level ? val('#rf-level') : '',
         hours: K.hours ? val('#rf-hours') : '', title: val('#rf-title'), place: val('#rf-place'), organizer: val('#rf-org'), audience: K.audience ? val('#rf-aud') : '',
-        startDate, endDate, knowledge: val('#rf-know')
+        startDate, endDate, knowledge: val('#rf-know'), apply: K.apply ? val('#rf-apply') : '',
+        otherProject: K.project && val('#rf-proj') === 'OTHER' ? val('#rf-other') : ''
       };
+      if (K.project && rec.projectId === 'OTHER' && !rec.otherProject) return toast('กรุณาพิมพ์ชื่อโครงการ', true);
       if (!rec.title) return toast('กรุณากรอก' + K.titleLabel.split(' / ')[0], true);
       if (!startDate || startDate === 'INVALID') return toast('วันที่ไม่ถูกต้อง', true);
       if (endDate === 'INVALID') return toast('วันที่สิ้นสุดไม่ถูกต้อง', true);
       if (endDate && endDate < startDate) return toast('วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม', true);
       if (K.detailReq && !rec.knowledge) return toast('กรุณากรอก' + K.detailShort, true);
+      if (applyReq && !rec.apply) return toast('กรุณากรอก' + K.applyLabel, true);
       const ph = photos.map((p, i) => p === 'keep' ? 'keep' : p ? p : (r['photo' + (i + 1)] ? null : 'keep'));
       try {
         await busy(() => api('saveRecord', { record: rec, photos: ph }));
@@ -791,7 +801,7 @@
       </div>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
         ${projs.length || pc.OTHER ? `<div class="table-wrap"><table><thead><tr><th>โครงการ</th><th class="r">ผู้เข้าร่วม (คน)</th><th class="r">รายการ</th></tr></thead><tbody>
-        ${projs.concat(pc.OTHER ? [{ id: 'OTHER', name: 'อื่น ๆ (นอกโครงการ)' }] : []).map(p => `<tr class="click" data-proj="${esc(p.id)}" title="ดูรายการของโครงการนี้"><td>${esc(p.name)} <span class="small muted">› ดูรายการ</span></td><td class="r num">${ppl[p.id] ? ppl[p.id].size : 0}</td><td class="r num">${pc[p.id] || 0}</td></tr>`).join('')}
+        ${projs.concat(pc.OTHER ? [{ id: 'OTHER', name: 'โครงการอื่น ๆ' }] : []).map(p => `<tr class="click" data-proj="${esc(p.id)}" title="ดูรายการของโครงการนี้"><td>${esc(p.name)} <span class="small muted">› ดูรายการ</span></td><td class="r num">${ppl[p.id] ? ppl[p.id].size : 0}</td><td class="r num">${pc[p.id] || 0}</td></tr>`).join('')}
         </tbody></table></div>` : `<p class="muted" style="margin:0">ยังไม่มีโครงการในปีนี้ เพิ่มได้ที่เมนู “ตั้งค่าปีงบ/โครงการ”</p>`}
       </section>
       <section><div class="page-head" style="margin-bottom:.6rem"><div class="grow"><h2>รายบุคคล</h2><div class="small muted">คลิกที่ชื่อเพื่อดูประวัติ รายการพัฒนาตนเอง โล่/รางวัล และงานวิทยากร</div></div></div>
@@ -880,7 +890,7 @@
     const fillProj = () => {
       if (!K.project) return;
       const y = $('#rc-fy').value;
-      $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map((p, i) => `<option value="${esc(p.id)}">${i + 1}. ${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">อื่น ๆ (นอกโครงการ)</option>`;
+      $('#rc-proj').innerHTML = `<option value="">ทุกโครงการ</option>` + S.meta.projects.filter(p => !y || p.year === y).map((p, i) => `<option value="${esc(p.id)}">${i + 1}. ${esc(p.name)}${y ? '' : ` (${p.year})`}</option>`).join('') + `<option value="OTHER">โครงการอื่น ๆ</option>`;
     };
     let all = [], known = null;
     // silent = โหลดเบื้องหลังจากการแจ้งเตือนเรียลไทม์ (ไม่ขึ้นหน้าจอโหลด และคงตัวกรอง/ตำแหน่งเลื่อนไว้)
@@ -1133,7 +1143,7 @@
       <table class="rp-kv">${K.project ? `<tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>` : row('ปีงบประมาณ', r.year)}
       ${K.level ? row('ระดับรางวัล', r.level) : ''}${row(K.orgLabel, r.organizer)}${row(K.placeLabel, r.place)}${K.audience ? row('กลุ่มผู้เข้าร่วม / จำนวน', r.audience) : ''}
       <tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>
-      ${K.detailReq || r.knowledge ? `<div class="rp-k">${K.detailLabel}</div><p class="rp-p">${esc(r.knowledge || '-')}</p>` : ''}<div class="rp-ph">${ph}</div></div>`;
+      ${K.detailReq || r.knowledge ? `<div class="rp-k">${K.detailLabel}</div><p class="rp-p">${esc(r.knowledge || '-')}</p>` : ''}${K.apply && r.apply ? `<div class="rp-k">${K.applyLabel}</div><p class="rp-p">${esc(r.apply)}</p>` : ''}<div class="rp-ph">${ph}</div></div>`;
   }
 
   const byDate = list => list.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
@@ -1681,11 +1691,11 @@
             Object.assign(r, { review: '', reviewNote: '', reviewBy: '', reviewAt: '' });
             const kind = kindOf(d);
             if (r.kind && kindOf(r) !== kind) return err('เปลี่ยนประเภทรายการไม่ได้');
-            ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge'].forEach(k => r[k] = d[k] || '');
+            ['year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge', 'apply', 'otherProject'].forEach(k => r[k] = d[k] || '');
             r.kind = kind;
             const p = kind === 'dev' ? db.projects.find(x => x.id === d.projectId) : null;
             if (kind !== 'dev') r.projectId = '';
-            r.projectName = kind !== 'dev' ? '' : p ? p.name : 'อื่น ๆ (นอกโครงการ)';
+            r.projectName = kind !== 'dev' ? '' : p ? p.name : (d.otherProject || 'โครงการอื่น ๆ');
             (q.photos || []).forEach((ph, i) => { if (ph === 'keep') return; r['photo' + (i + 1)] = ph && ph.data ? ph.data : ''; });
             save(); return ok(r);
           }

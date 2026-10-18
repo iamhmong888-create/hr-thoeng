@@ -17,7 +17,7 @@ const STAFF_FIELDS = ['id', 'prefix', 'firstName', 'lastName', 'position', 'citi
 // ครูแก้ไขข้อมูลของตนเองได้ทุกช่อง ยกเว้นสิทธิ์การใช้งาน (role)
 const TEACHER_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id' && k !== 'role');
 const ADMIN_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id');
-const REC_FIELDS = ['kind', 'year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge'];
+const REC_FIELDS = ['kind', 'year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge', 'apply', 'otherProject'];
 // ประเภทรายการ: dev = การพัฒนาตนเอง (รายการเดิมที่ไม่มี kind) · award = โล่/รางวัล · speaker = วิทยากร
 const KINDS = ['dev', 'award', 'speaker'];
 const kindOf = r => KINDS.includes(r && r.kind) ? r.kind : 'dev';
@@ -378,7 +378,7 @@ export function create(CFG) {
       if (old && kindOf(old) !== kind) throw new Error('เปลี่ยนประเภทรายการไม่ได้');
       const p = kind === 'dev' ? m.projects.find(p => p.id === r.projectId) : null;
       // แก้ไขรายการแล้ว สถานะกลับเป็น "รอตรวจ" เพื่อให้ผู้บริหารตรวจใหม่
-      const out = { staffId, updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), projectName: kind !== 'dev' ? '' : p ? p.name : 'อื่น ๆ (นอกโครงการ)', review: '', reviewNote: '', reviewBy: '', reviewAt: '' };
+      const out = { staffId, updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), projectName: kind !== 'dev' ? '' : p ? p.name : (String(r.otherProject || '').trim() || 'โครงการอื่น ๆ'), review: '', reviewNote: '', reviewBy: '', reviewAt: '' };
       REC_FIELDS.forEach(k => out[k] = String(r[k] === undefined || r[k] === null ? '' : r[k]).trim());
       out.kind = kind;
       if (kind !== 'dev') out.projectId = '';
