@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261011g';
+  const APP_VERSION = '20261018a';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -167,11 +167,22 @@
     back.innerHTML = `<div class="modal ${size}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
       <div class="modal-h"><h2>${esc(title)}</h2><button class="btn ghost sm" data-close aria-label="ปิด">✕</button></div>
       <div class="modal-b">${body}</div>${foot ? `<div class="modal-f">${foot}</div>` : ''}</div>`;
-    const close = () => { back.remove(); document.removeEventListener('keydown', onKey); };
+    // วางหน้าต่างให้ตรงกับส่วนของจอที่มองเห็นจริง (Android: หลังคีย์บอร์ดปิด หน้าจออาจค้างตำแหน่งเลื่อน ทำให้หน้าต่างหลุดขอบจอ)
+    const vv = window.visualViewport;
+    const fit = () => { if (!vv) return; Object.assign(back.style, { top: vv.offsetTop + 'px', left: vv.offsetLeft + 'px', width: vv.width + 'px', height: vv.height + 'px', right: 'auto', bottom: 'auto' }); };
+    const close = () => {
+      if (!back.isConnected) return;
+      const a = document.activeElement; if (a && back.contains(a)) a.blur(); // ปิดคีย์บอร์ดก่อน
+      back.remove(); document.removeEventListener('keydown', onKey);
+      if (vv) { vv.removeEventListener('resize', fit); vv.removeEventListener('scroll', fit); }
+      if (!$('.modal-back')) document.documentElement.classList.remove('modal-open');
+    };
     const onKey = e => { if (e.key === 'Escape') close(); };
     back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) close(); });
     document.addEventListener('keydown', onKey);
+    document.documentElement.classList.add('modal-open');
     document.body.appendChild(back);
+    if (vv) { fit(); vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
     return { el: back, close };
   }
   function confirmBox(text, okLabel = 'ยืนยัน', danger = true) {
