@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261018b';
+  const APP_VERSION = '20261021a';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -186,6 +186,61 @@
     if (vv) { fit(); vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
     return { el: back, close };
   }
+  /* ดรอปดาวน์ที่แสดงข้อความยาวได้ครบ (ขึ้นบรรทัดใหม่) ใช้กับรายชื่อโครงการ
+     ดรอปดาวน์ปกติของเบราว์เซอร์ตัดชื่อยาวทิ้ง จึงซ่อนไว้และแสดงรายการเองแทน (ค่ายังเก็บใน <select> เดิม) */
+  let rselOpen = null;
+  function richSelect(sel) {
+    if (!sel || sel.dataset.rich) return sel;
+    sel.dataset.rich = '1';
+    const wrap = document.createElement('div'); wrap.className = 'rsel';
+    sel.parentNode.insertBefore(wrap, sel); wrap.appendChild(sel);
+    sel.classList.add('rsel-native'); sel.tabIndex = -1; sel.setAttribute('aria-hidden', 'true');
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'rsel-btn'; btn.setAttribute('aria-haspopup', 'listbox');
+    const lbl = sel.closest('label'); if (lbl) { const t = $('span', lbl); if (t) btn.setAttribute('aria-label', t.textContent.replace('*', '').trim()); }
+    wrap.appendChild(btn);
+    const paint = () => { const o = sel.selectedOptions[0]; btn.textContent = o ? o.textContent : '—'; };
+    const proto = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    Object.defineProperty(sel, 'value', { get() { return proto.get.call(this); }, set(v) { proto.set.call(this, v); paint(); }, configurable: true });
+    new MutationObserver(paint).observe(sel, { childList: true, subtree: true, attributes: true });
+    sel.addEventListener('change', paint);
+    const close = () => { if (rselOpen && rselOpen.btn === btn) { rselOpen.list.remove(); rselOpen = null; btn.setAttribute('aria-expanded', 'false'); } };
+    btn.onclick = e => {
+      e.stopPropagation();
+      if (rselOpen) { const same = rselOpen.btn === btn; rselOpen.close(); if (same) return; }
+      const list = document.createElement('div'); list.className = 'rsel-list'; list.setAttribute('role', 'listbox');
+      [...sel.options].forEach(o => {
+        const it = document.createElement('button'); it.type = 'button'; it.className = 'rsel-opt' + (o.selected ? ' on' : ''); it.textContent = o.textContent;
+        it.setAttribute('role', 'option'); it.setAttribute('aria-selected', o.selected ? 'true' : 'false');
+        it.onclick = ev => { ev.stopPropagation(); sel.value = o.value; sel.dispatchEvent(new Event('change', { bubbles: true })); close(); btn.focus(); };
+        list.appendChild(it);
+      });
+      document.body.appendChild(list);
+      const r = btn.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+      const w = Math.min(Math.max(r.width, 360), W - 16);
+      const below = H - r.bottom - 12, above = r.top - 12, up = below < 220 && above > below;
+      Object.assign(list.style, { left: Math.max(8, Math.min(r.left, W - w - 8)) + 'px', width: w + 'px', maxHeight: Math.max(160, up ? above : below) + 'px' });
+      if (up) list.style.bottom = (H - r.top + 4) + 'px'; else list.style.top = (r.bottom + 4) + 'px';
+      rselOpen = { btn, list, close };
+      btn.setAttribute('aria-expanded', 'true');
+      const cur = $('.rsel-opt.on', list); (cur || list.firstChild) && (cur || list.firstChild).focus({ preventScroll: true });
+      if (cur) cur.scrollIntoView({ block: 'nearest' });
+    };
+    paint();
+    return sel;
+  }
+  // ปิดรายการเมื่อแตะที่อื่น เลื่อนหน้า หรือกด Esc
+  document.addEventListener('click', e => { if (rselOpen && !rselOpen.list.contains(e.target)) rselOpen.close(); });
+  document.addEventListener('scroll', e => { if (rselOpen && !rselOpen.list.contains(e.target)) rselOpen.close(); }, true);
+  window.addEventListener('resize', () => { if (rselOpen) rselOpen.close(); });
+  document.addEventListener('keydown', e => {
+    if (!rselOpen) return;
+    if (e.key === 'Escape') { e.stopPropagation(); const b = rselOpen.btn; rselOpen.close(); b.focus(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); const items = $$('.rsel-opt', rselOpen.list), i = items.indexOf(document.activeElement);
+      const n = items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))]; if (n) n.focus();
+    }
+  }, true);
+
   function confirmBox(text, okLabel = 'ยืนยัน', danger = true) {
     return new Promise(res => {
       const m = modal({ title: 'ยืนยันการทำรายการ', size: 'sm', body: `<p style="margin:0">${esc(text)}</p>`, foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cf-ok">${esc(okLabel)}</button>` });
@@ -647,7 +702,7 @@
       ${list.some(r => r.review === 'revise') ? `<div class="notice revise-alert"><div class="grow"><b>มี ${list.filter(r => r.review === 'revise').length} รายการที่ผู้บริหารส่งกลับให้แก้ไข</b> อ่านความเห็นในรายการ แล้วกด “แก้ไข” เพื่อปรับปรุง เมื่อบันทึกแล้วสถานะจะกลับเป็น “รอตรวจ”</div></div>` : ''}
       <div class="recs">${shown.length ? shown.map(r => recCard(r, { mode: 'own' })).join('') : list.length ? '<div class="empty-state">ยังไม่มีรายการในโครงการนี้</div>' : `<div class="empty-state">ยังไม่มีรายการในปีงบประมาณนี้<br>${K.empty}</div>`}</div>`;
     $('#dev-add').onclick = () => recordForm({ year: S.fy, kind }, reload, kind);
-    const dp = $('#dev-proj'); if (dp) dp.onchange = e => { S.devProj = e.target.value; reload(); };
+    const dp = richSelect($('#dev-proj')); if (dp) dp.onchange = e => { S.devProj = e.target.value; reload(); };
     $('#dev-pdf').onclick = () => reportPerson(S.user, shown, { year: S.fy, profile: false, kind, project: S.devProj ? projName(S.devProj) : '' });
     bindRecList(box, shown, reload);
   }
@@ -686,7 +741,7 @@
       body: `${r.review === 'approved' ? '<div class="notice info"><div class="grow">รายการนี้ผู้บริหารตรวจแล้ว ถ้าบันทึกการแก้ไข สถานะจะกลับเป็น “รอตรวจ”</div></div>' : ''}${r.review === 'revise' ? `<div class="review-note revise"><b>สิ่งที่ต้องแก้ไข</b><div>${esc(r.reviewNote || '')}</div></div>` : ''}
       <div class="grid">
         <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('rf-year', r.year || S.fy)}</label>
-        ${K.project ? `<label class="field"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>
+        ${K.project ? `<label class="field wide"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>
         <label class="field wide" id="rf-other-f"><span>ชื่อโครงการ <span class="req">*</span></span><input type="text" id="rf-other" value="${esc(r.otherProject || (r.projectId === 'OTHER' && r.projectName !== 'โครงการอื่น ๆ' && r.projectName !== 'อื่น ๆ (นอกโครงการ)' ? r.projectName || '' : ''))}" placeholder="พิมพ์ชื่อโครงการที่เข้าร่วม"></label>` : ''}
         <label class="field"><span>${K.typeLabel} <span class="req">*</span></span><select id="rf-type">${types.map(t => `<option ${t === r.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
         ${K.level ? `<label class="field"><span>ระดับรางวัล <span class="req">*</span></span><select id="rf-level">${AWARD_LEVELS.map(t => `<option ${t === r.level ? 'selected' : ''}>${t}</option>`).join('')}</select></label>` : ''}
@@ -707,6 +762,7 @@
     });
     const el = m.el;
     const syncOther = () => { const f = $('#rf-other-f', el); if (f) f.hidden = $('#rf-proj', el).value !== 'OTHER'; };
+    if (K.project) richSelect($('#rf-proj', el));
     if (K.project) { $('#rf-year', el).onchange = e => { $('#rf-proj', el).innerHTML = projOpts(e.target.value); syncOther(); }; $('#rf-proj', el).onchange = syncOther; syncOther(); }
     const paint = i => {
       const pv = $(`.pp[data-i="${i}"] .pv`, el);
@@ -922,6 +978,7 @@
       reportRecords(filtered(), name, sub, kind);
     };
     fillProj();
+    if (K.project) richSelect($('#rc-proj'));
     if (preset) $('#rc-proj').value = preset.proj;
     load();
   }
