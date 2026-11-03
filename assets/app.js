@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261021a';
+  const APP_VERSION = '20261103a';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -998,6 +998,8 @@
     .rp-root table tr .r{text-align:right} .rp-root table tr .c{text-align:center}
     .rp-root table.rp-kv tr td:first-child{width:34%;background:#f6f8fb;color:#333}
     .rp-root .rp-rec{border:1px solid #9aa4b2;border-radius:6px;padding:8px 10px;margin:10px 0}
+    .rp-root .rp-p.rp-more{margin-top:0}.rp-root .rp-p.rp-mid{margin-bottom:0}
+    .rp-root .rp-rec.rp-cont{border-top-style:dashed;border-top-left-radius:0;border-top-right-radius:0}
     .rp-root .rp-t{font-weight:700;font-size:15px}
     .rp-root .rp-m{font-size:13px;color:#333;margin:2px 0 6px}
     .rp-root .rp-k{font-size:13px;font-weight:700;color:#222;margin-top:6px}
@@ -1047,6 +1049,25 @@
     return rest;
   }
 
+  // แบ่งกรอบรายการ (ชื่อเรื่อง/ตาราง/ความรู้/การนำไปใช้/รูป) ให้พอดีพื้นที่ที่เหลือในหน้า ส่วนที่เหลือต่อหน้าถัดไป
+  const REC_MIN = 170; // ส่วนแรกต้องสูงอย่างน้อยเท่านี้ (ชื่อเรื่อง + ตาราง) มิฉะนั้นย้ายทั้งรายการไปหน้าใหม่
+  function splitRecToFit(el, room) {
+    if (room < REC_MIN || el.children.length < 2) return null;
+    const rest = el.cloneNode(false); rest.classList.add('rp-cont');
+    el.after(rest);
+    const h = () => el.getBoundingClientRect().height;
+    const moveLast = () => rest.insertBefore(el.lastElementChild, rest.firstChild);
+    while (h() > room && el.children.length > 1) moveLast();
+    // หัวข้อย่อย ("ความรู้ที่ได้รับ", "การนำไปใช้") ต้องไม่ค้างท้ายหน้าโดยไม่มีเนื้อหา
+    while (el.children.length > 1 && el.lastElementChild.classList.contains('rp-k')) moveLast();
+    const firstOk = [...el.children].some(c => c.tagName === 'TABLE' || c.classList.contains('rp-p') || c.classList.contains('rp-ph'));
+    if (h() > room || !rest.children.length || !firstOk) {
+      while (rest.firstChild) el.appendChild(rest.firstChild);
+      rest.remove(); return null;
+    }
+    return rest;
+  }
+
   const safeName = s => String(s).replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, '_').slice(0, 80);
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1090,12 +1111,11 @@
         let r = el.getBoundingClientRect();
         const gap = prevBottom == null ? 0 : Math.max(0, r.top - prevBottom);
         const fitTable = room => {
-          if (el.tagName === 'TABLE' && r.height > room) {
-            const rest = splitTableToFit(el, room);
-            if (rest) { blocks.splice(i + 1, 0, rest); r = el.getBoundingClientRect(); }
-          }
+          if (r.height <= room) return;
+          const rest = el.tagName === 'TABLE' ? splitTableToFit(el, room) : el.classList.contains('rp-rec') ? splitRecToFit(el, room) : null;
+          if (rest) { blocks.splice(i + 1, 0, rest); r = el.getBoundingClientRect(); }
         };
-        if (y > 0) fitTable(CH - y - gap);
+        if (y > 0 && (el.tagName === 'TABLE' || CH - y - gap >= REC_MIN)) fitTable(CH - y - gap);
         let need = r.height;
         // หัวข้อต้องอยู่หน้าเดียวกับเนื้อหาส่วนแรกของมัน (สรุปสั้น ๆ + รายการแรก/หัวตาราง)
         if (el.tagName === 'H2') {
@@ -1103,7 +1123,8 @@
             const nb = blocks[j], h = nb.getBoundingClientRect().height + 12;
             if (nb.tagName === 'TABLE') { need += 90; break; }
             if (nb.tagName === 'H2') break;
-            if (nb.classList.contains('rp-rec') || h > CH * 0.35) { need += Math.min(h, CH * 0.35); break; }
+            if (nb.classList.contains('rp-rec')) { need += Math.min(h, REC_MIN + 12); break; } // รายการแบ่งต่อหน้าถัดไปได้ ขอพื้นที่แค่ส่วนแรก
+            if (h > CH * 0.35) { need += Math.min(h, CH * 0.35); break; }
             need += h;
           }
         }
@@ -1191,6 +1212,8 @@
     }).join('')}</table>`).join('');
   }
 
+  // ข้อความยาว: แยกทีละบรรทัด เพื่อให้แบ่งต่อหน้าถัดไปได้โดยไม่เหลือช่องว่างท้ายหน้า
+  const rpParas = t => { const L = String(t).replace(/\r/g, '').split('\n'); return L.map((x, i) => `<p class="rp-p${i ? ' rp-more' : ''}${i < L.length - 1 ? ' rp-mid' : ''}">${x.trim() ? esc(x) : '&nbsp;'}</p>`).join(''); };
   function rpRecord(r, n, who) {
     const K = KIND[kindOf(r)];
     const ph = ['photo1', 'photo2'].map((f, i) => r[f] && photoUrl(r[f]) ? `<div class="rp-img" style="background-image:url('${photoUrl(r[f]).replace(/'/g, '%27')}')"></div>` : `<div class="rp-none">ไม่มีรูปที่ ${i + 1}</div>`).join('');
@@ -1200,7 +1223,7 @@
       <table class="rp-kv">${K.project ? `<tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>` : row('ปีงบประมาณ', r.year)}
       ${K.level ? row('ระดับรางวัล', r.level) : ''}${row(K.orgLabel, r.organizer)}${row(K.placeLabel, r.place)}${K.audience ? row('กลุ่มผู้เข้าร่วม / จำนวน', r.audience) : ''}
       <tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>
-      ${K.detailReq || r.knowledge ? `<div class="rp-k">${K.detailLabel}</div><p class="rp-p">${esc(r.knowledge || '-')}</p>` : ''}${K.apply && r.apply ? `<div class="rp-k">${K.applyLabel}</div><p class="rp-p">${esc(r.apply)}</p>` : ''}<div class="rp-ph">${ph}</div></div>`;
+      ${K.detailReq || r.knowledge ? `<div class="rp-k">${K.detailLabel}</div>${rpParas(r.knowledge || '-')}` : ''}${K.apply && r.apply ? `<div class="rp-k">${K.applyLabel}</div>${rpParas(r.apply)}` : ''}<div class="rp-ph">${ph}</div></div>`;
   }
 
   const byDate = list => list.slice().sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
