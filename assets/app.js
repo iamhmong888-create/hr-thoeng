@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261103a';
+  const APP_VERSION = '20261103b';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -1128,7 +1128,8 @@
             need += h;
           }
         }
-        if (y > 0 && y + gap + Math.min(need, CH) > CH) { pages.push([]); y = 0; fitTable(CH); }
+        // rp-break = ขึ้นหน้าใหม่เสมอ (เช่น ชื่อบุคลากรแต่ละคนในรายงานรวม)
+        if (y > 0 && (el.classList.contains('rp-break') || y + gap + Math.min(need, CH) > CH)) { pages.push([]); y = 0; fitTable(CH); }
         else if (y > 0) y += gap;
         else fitTable(CH);
         pages[pages.length - 1].push(el);
@@ -1274,7 +1275,7 @@
       <table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th class="r">จำนวนรายการ</th>${K.hours ? '<th class="r">ชั่วโมง</th>' : ''}</tr></thead><tbody>
       ${rows.map((x, i) => `<tr><td class="c">${i + 1}</td><td>${esc(x.n)}</td><td class="r">${x.list.length}</td>${K.hours ? `<td class="r">${sumHours(x.list)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="${K.hours ? 4 : 3}" class="c">ไม่มีรายการ</td></tr>`}
       </tbody></table>
-      ${rows.map(x => `<h2>${esc(x.n)}</h2>${byDate(x.list).map((r, i) => rpRecord(r, i + 1)).join('')}`).join('')}`;
+      ${rows.map(x => `<h2 class="rp-break">${esc(x.n)}</h2>${byDate(x.list).map((r, i) => rpRecord(r, i + 1)).join('')}`).join('')}`;
     openReport({ title: K.reportAll, subtitle, build, recs: list, filename: K.reportAll + ' ' + (subtitle.match(/\d{4}/) || [''])[0] });
   }
 
