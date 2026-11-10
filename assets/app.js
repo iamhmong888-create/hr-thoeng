@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261103b';
+  const APP_VERSION = '20261110a';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -108,7 +108,29 @@
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
   };
-  async function api(action, payload = {}) {
+  /* จำข้อมูลที่โหลดแล้วไว้ในหน่วยความจำ: เปิดเมนูเดิมซ้ำไม่ต้องรอโหลดใหม่
+     - ล้างทันทีเมื่อมีการบันทึก/แก้ไข/ลบ หรือเมื่อมีรายการใหม่จากคนอื่น (เรียลไทม์)
+     - เก็บไว้ไม่เกิน 5 นาที แล้วโหลดใหม่ (เพื่อให้เห็นผลการตรวจล่าสุด) */
+  const READ_ACTIONS = new Set(['listRecords', 'listStaff', 'listLeaves', 'listLeaveBalances', 'meta', 'listAdmins']);
+  const NO_CLEAR = new Set(['getPhotos', 'setupStatus', 'me', 'forgotPassword', 'backupData']);
+  const CACHE_MS = 5 * 60 * 1000;
+  const apiCache = new Map();
+  const clearCache = action => { if (!action) { apiCache.clear(); return; } [...apiCache.keys()].forEach(k => { if (k.startsWith(action + '|')) apiCache.delete(k); }); };
+  async function api(action, payload = {}, opt = {}) {
+    if (READ_ACTIONS.has(action)) {
+      const key = action + '|' + JSON.stringify(payload);
+      const hit = apiCache.get(key);
+      if (hit && !opt.fresh && Date.now() - hit.t < CACHE_MS) return hit.p;
+      const p = apiRaw(action, payload).then(d => { if (action === 'listRecords' && Array.isArray(d)) d.forEach(r => { if (r.id) REC_VER[r.id] = r.updatedAt || r.createdAt || ''; }); return d; });
+      apiCache.set(key, { t: Date.now(), p });
+      p.catch(() => { if (apiCache.get(key) && apiCache.get(key).p === p) apiCache.delete(key); });
+      return p;
+    }
+    const res = await apiRaw(action, payload);
+    if (!NO_CLEAR.has(action)) { clearCache(); if (action === 'saveRecord' && payload.record && payload.record.id) photoForget(payload.record.id); }
+    return res;
+  }
+  async function apiRaw(action, payload) {
     const body = Object.assign({ action, token: S.token }, payload);
     let res;
     try { res = await (await backend()).handle(DEMO ? JSON.parse(JSON.stringify(body)) : body); }
@@ -325,7 +347,7 @@
   }
 
   async function enter(d) {
-    S.role = d.role; S.user = d.user; S.cache = {}; S.authUid = d.uid || null;
+    S.role = d.role; S.user = d.user; S.cache = {}; S.authUid = d.uid || null; clearCache();
     S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
     S.tab = store.get('hr_tab_' + S.role) || (S.role === 'admin' ? 'overview' : 'profile');
@@ -361,8 +383,7 @@
       if (typeof n === 'number') n = Object.assign(noPending(), { dev: n });
       const prev = S.pending;
       S.pending = n; paintBadge();
-      if (!first) notifyNew(prev, n);
-      if (!first) scheduleLiveRefresh();
+      if (!first) { clearCache('listRecords'); notifyNew(prev, n); scheduleLiveRefresh(); }
       first = false;
     }, ok => { liveOk = ok; });
     // สำรอง: ถ้าการเชื่อมต่อเรียลไทม์ใช้ไม่ได้ ตรวจข้อมูลใหม่ทุก 1 นาที (เฉพาะตอนเปิดหน้านี้อยู่)
@@ -372,7 +393,7 @@
   async function liveCatchUp() {
     if (S.role !== 'admin') return;
     try {
-      const all = await api('listRecords', {});
+      const all = await api('listRecords', {}, { fresh: true });
       const n = countPending(all, S.user.id);
       notifyNew(S.pending, n);
       S.pending = n; paintBadge();
@@ -395,7 +416,7 @@
   async function refreshPending() {
     if (S.role !== 'admin' || stopWatch) return; // ถ้าติดตามแบบเรียลไทม์อยู่แล้ว ไม่ต้องโหลดซ้ำ
     try {
-      const all = await api('listRecords', {});
+      const all = await api('listRecords', {}, { fresh: true });
       S.pending = countPending(all, S.user.id);
     } catch (e) { return; }
     paintBadge();
@@ -418,6 +439,7 @@
     stopPendingWatch();
     if (!silent && S.token) { try { await busy(() => api('logout')); } catch (e) { } }
     S.token = null; S.user = null; S.role = null; store.set('hr_token', null);
+    clearCache(); photoDB.clear(); // ไม่เก็บข้อมูลของบัญชีเดิมไว้ในเครื่อง (เผื่อใช้เครื่องร่วมกัน)
     renderLogin(silent && wasIn ? 'หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่' : '');
   }
 
@@ -611,12 +633,37 @@
     const cl = $('#rv-clear', m.el); if (cl) cl.onclick = () => send('');
   }
 
-  // โหลดรูปหลักฐานทีละรายการ (ไม่โหลดซ้ำ)
+  // จำรูปหลักฐานไว้ในเครื่อง (IndexedDB) เปิดครั้งต่อไปไม่ต้องดาวน์โหลดรูปซ้ำ · รูปเปลี่ยนเมื่อรายการถูกแก้ไข (updatedAt เปลี่ยน)
+  const REC_VER = {}; // id รายการ → updatedAt
+  const photoDB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('no idb'));
+      const rq = indexedDB.open('hr-photos', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('p');
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+    }).catch(e => { dbp = null; throw e; }));
+    const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('p', mode); const r = fn(t.objectStore('p')); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
+    return {
+      get: id => tx('readonly', st => st.get(id)).catch(() => null),
+      put: (id, v) => tx('readwrite', st => st.put(v, id)).catch(() => null),
+      del: id => tx('readwrite', st => st.delete(id)).catch(() => null),
+      clear: () => tx('readwrite', st => st.clear()).catch(() => null)
+    };
+  })();
   const photoReq = new Map();
+  function photoForget(id) { photoReq.delete(id); delete PHOTO[`fs:${id}:1`]; delete PHOTO[`fs:${id}:2`]; photoDB.del(id); }
   function fetchPhotos(id) {
     if (!photoReq.has(id)) {
-      photoReq.set(id, api('getPhotos', { id }).then(d => { PHOTO[`fs:${id}:1`] = d.p1; PHOTO[`fs:${id}:2`] = d.p2; })
-        .catch(() => { photoReq.delete(id); }));
+      const ver = REC_VER[id] || '';
+      const set = d => { PHOTO[`fs:${id}:1`] = d.p1; PHOTO[`fs:${id}:2`] = d.p2; };
+      photoReq.set(id, (async () => {
+        const c = FB && ver ? await photoDB.get(id) : null;
+        if (c && c.v === ver) return set(c);
+        const d = await api('getPhotos', { id });
+        set(d);
+        if (FB && ver) photoDB.put(id, { v: ver, p1: d.p1 || '', p2: d.p2 || '' });
+      })().catch(() => { photoReq.delete(id); }));
     }
     return photoReq.get(id);
   }
@@ -855,6 +902,12 @@
         <div class="stat click" data-go="awards" title="ไปที่ ${KIND.award.adminMenu}"><div class="v">${awards.length}</div><div class="k">โล่/รางวัล (${new Set(awards.map(r => r.staffId)).size} คน)${awards.some(r => !r.review) ? ` · <span style="color:var(--warn)">รอตรวจ ${awards.filter(r => !r.review).length}</span>` : ''}</div></div>
         <div class="stat click" data-go="speakers" title="ไปที่ ${KIND.speaker.adminMenu}"><div class="v">${talks.length}</div><div class="k">งานวิทยากร (${sumHours(talks)} ชม.)${talks.some(r => !r.review) ? ` · <span style="color:var(--warn)">รอตรวจ ${talks.filter(r => !r.review).length}</span>` : ''}</div></div>
       </div>
+      <section class="panel"><h3>ตารางบันทึกของบุคลากร ปีงบประมาณ ${esc(S.fy)}</h3>
+        <p class="small muted" style="margin:0 0 .7rem">ตารางรวมทุกคนตามแบบฟอร์มของหน่วยงาน (กระดาษ A4 แนวนอน หัวตารางพิมพ์ซ้ำทุกหน้า) กดแล้วดูตัวอย่างก่อน จากนั้นเลือกบันทึกไฟล์ PDF หรือสั่งพิมพ์</p>
+        <div class="toolbar"><button class="btn" data-log="dev">ตารางการเข้ารับการพัฒนาศักยภาพ (${recs.length})</button>
+          <button class="btn" data-log="speaker">ตารางการได้รับเป็นวิทยากร (${talks.length})</button>
+          <button class="btn" data-log="award">ตารางการรับโล่หรือรางวัล (${awards.length})</button></div>
+      </section>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
         ${projs.length || pc.OTHER ? `<div class="table-wrap"><table><thead><tr><th>โครงการ</th><th class="r">ผู้เข้าร่วม (คน)</th><th class="r">รายการ</th></tr></thead><tbody>
         ${projs.concat(pc.OTHER ? [{ id: 'OTHER', name: 'โครงการอื่น ๆ' }] : []).map(p => `<tr class="click" data-proj="${esc(p.id)}" title="ดูรายการของโครงการนี้"><td>${esc(p.name)} <span class="small muted">› ดูรายการ</span></td><td class="r num">${ppl[p.id] ? ppl[p.id].size : 0}</td><td class="r num">${pc[p.id] || 0}</td></tr>`).join('')}
@@ -866,6 +919,7 @@
         <td><div class="bar"><i style="width:${(sumHours(list) / maxH * 100).toFixed(1)}%"></i></div></td><td class="r num">${awards.filter(r => r.staffId === s.id).length || '—'}</td><td class="r num">${talks.filter(r => r.staffId === s.id).length || '—'}</td><td class="small num">${list[0] ? esc(thDate(list[0].startDate, true)) : '—'}</td></tr>`).join('')}
       </tbody></table></div></section>`;
     $$('#ov-body tr.click[data-id]').forEach(tr => tr.onclick = () => staffDetail(staff.find(s => s.id === tr.dataset.id), () => viewOverview(v)));
+    $$('#ov-body [data-log]').forEach(b => b.onclick = () => reportLog(b.dataset.log, ofKind(allRecs, b.dataset.log), staff, S.fy));
     $$('#ov-body [data-go]').forEach(el => el.onclick = () => { S.tab = el.dataset.go; store.set('hr_tab_' + S.role, S.tab); render(); });
     $$('#ov-body tr.click[data-proj]').forEach(tr => tr.onclick = () => { S.cache.recPreset = { fy: S.fy, proj: tr.dataset.proj }; S.tab = 'records'; render(); });
   }
@@ -1010,6 +1064,18 @@
     .rp-root .rp-sum{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;margin:4px 0 10px}
     .rp-root .rp-sign{display:flex;justify-content:space-around;gap:20px;margin-top:36px;text-align:center;font-size:14px;line-height:2.1}
     .rp-root footer{margin-top:18px;font-size:11.5px;color:#666;text-align:right}
+    .rp-root table.rp-log tr th{text-align:center;vertical-align:middle;background:#e9eef5}
+    .rp-root table.rp-log tr td{font-size:13px;padding:4px 6px}
+    .rp-root table.rp-log .nw{white-space:nowrap}
+    .rp-root table.rp-log .lg-sub{font-size:12px;color:#555}
+    .rp-root table.rp-log tr th:nth-child(1){width:6%}.rp-root table.rp-log tr th:nth-child(2){width:17%}.rp-root table.rp-log tr th:nth-child(3){width:33%}
+    .rp-root table.rp-log tr th:nth-child(4){width:13%}.rp-root table.rp-log tr th:nth-child(5){width:17%}.rp-root table.rp-log tr th:nth-child(6),.rp-root table.rp-log tr th:nth-child(7){width:7%}
+    .rp-root table.rp-log.no-h tr th:nth-child(3){width:44%}.rp-root table.rp-log.no-h tr th:nth-child(5){width:20%}
+    .rp-root table.rp-log tr.g-next td.g{border-top-color:transparent}
+    .rp-root table.rp-log tr.g-first td{border-top:1.5px solid #6b7685}
+    .rp-root table.rp-log .g-cont{display:none;color:#555}
+    .rp-root table.rp-log tbody tr.g-next:first-child td.g{border-top-color:#9aa4b2}
+    .rp-root table.rp-log tbody tr:first-child .g-cont{display:inline}
     .rp-root .rp-empty{color:#666;text-align:center;padding:16px;border:1px dashed #bbb}`;
 
   function thToday() { const d = new Date(); return `${d.getDate()} ${TH_M[d.getMonth()]} ${d.getFullYear() + 543}`; }
@@ -1198,8 +1264,21 @@
         <div class="pdfv-pages">${views.map((v, i) => `<div class="pdfv-page" style="aspect-ratio:${PW}/${PH}" role="img" aria-label="หน้า ${i + 1} จาก ${views.length}">
           <img src="${v.src}" alt="" style="left:${pct(v.x, PW)};top:${pct(v.y, PH)};width:${pct(v.w, PW)};height:${pct(v.h, PH)}">
           <span class="pdfv-no" style="right:${pct(M, PW)};bottom:${pct(M / 2 - 4, PH)}">${i + 1} / ${views.length}</span></div>`).join('')}</div>`,
-      foot: `<button class="btn" data-close>ปิด</button><button class="btn primary" id="pv-save">บันทึกไฟล์ PDF</button>`
+      foot: `<button class="btn" data-close>ปิด</button><button class="btn" id="pv-print">พิมพ์</button><button class="btn primary" id="pv-save">บันทึกไฟล์ PDF</button>`
     });
+    // สั่งพิมพ์: เปิดไฟล์ PDF ในกรอบที่ซ่อนไว้แล้วเรียกหน้าต่างพิมพ์ (มือถือ: เปิดไฟล์ในแท็บใหม่ แล้วพิมพ์/แชร์จากตัวเปิดไฟล์)
+    $('#pv-print', m.el).onclick = () => {
+      let url;
+      try { url = URL.createObjectURL(pdf.output('blob')); } catch (e) { return toast('สร้างไฟล์สำหรับพิมพ์ไม่สำเร็จ', true); }
+      const openTab = () => { const w = window.open(url, '_blank'); if (!w) toast('เบราว์เซอร์บล็อกหน้าต่างใหม่ กรุณาบันทึกไฟล์ PDF แล้วสั่งพิมพ์จากไฟล์', true); };
+      if (isPhone()) return openTab();
+      const old = $('#pv-print-frame'); if (old) old.remove();
+      const f = document.createElement('iframe'); f.id = 'pv-print-frame'; f.title = 'พิมพ์';
+      Object.assign(f.style, { position: 'fixed', right: '0', bottom: '0', width: '1px', height: '1px', border: '0', opacity: '0' });
+      f.onload = () => setTimeout(() => { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) { openTab(); } }, 300);
+      f.src = url; document.body.appendChild(f);
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+    };
     $('#pv-save', m.el).onclick = () => {
       try { pdf.save(fname); toast('บันทึกไฟล์ PDF แล้ว'); } catch (e) { toast('บันทึกไฟล์ไม่สำเร็จ กรุณาลองใหม่', true); }
     };
@@ -1256,6 +1335,38 @@
       subtitle: name + (year ? ` · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : ''), build, recs: recs || [],
       filename: [recs ? (profile ? 'ประวัติและผลการปฏิบัติงาน' : K.file) : 'ประวัติส่วนตัว', u.firstName, u.lastName, year, project ? project.slice(0, 40) : ''].filter(Boolean).join(' ')
     });
+  }
+
+  /* ตารางบันทึกรวมทุกคน (ตามแบบฟอร์ม): 1 แถวต่อ 1 รายการ เรียงตามรายชื่อบุคลากร
+     ลำดับ ชื่อ และชั่วโมงรวมของแต่ละคน แสดงที่แถวแรกของคนนั้น (ถ้าข้ามหน้า แถวแรกของหน้าใหม่จะแสดงชื่อซ้ำพร้อมคำว่า "ต่อ") */
+  const LOG = {
+    dev: { title: 'ตารางบันทึกผลการเข้ารับการพัฒนาศักยภาพของครูและบุคลากรทางการศึกษา', file: 'ตารางการพัฒนาศักยภาพ',
+      cols: ['ชื่อโครงการที่เข้ารับการพัฒนา', 'หน่วยงานที่จัด', 'ชั่วโมงพัฒนา'], hours: true,
+      main: r => `${esc(r.projectName || '-')}${r.title && r.title !== r.projectName ? `<div class="lg-sub">${esc(r.title)}</div>` : ''}` },
+    speaker: { title: 'ตารางบันทึกการได้รับเป็นวิทยากรของครูและบุคลากรทางการศึกษา', file: 'ตารางการเป็นวิทยากร',
+      cols: ['หัวข้อเป็นวิทยากร', 'หน่วยงานที่เชิญ', 'จำนวนชั่วโมง'], hours: true,
+      main: r => `${esc(r.title || '-')}${r.type ? `<div class="lg-sub">${esc(r.type)}</div>` : ''}` },
+    award: { title: 'ตารางบันทึกการรับโล่หรือรางวัลของครูและบุคลากรทางการศึกษา', file: 'ตารางการรับโล่รางวัล',
+      cols: ['รางวัลที่ได้รับ', 'หน่วยงานที่มอบ'], hours: false,
+      main: r => `${esc(r.title || '-')}${[r.type, r.level].filter(Boolean).length ? `<div class="lg-sub">${esc([r.type, r.level].filter(Boolean).join(' · '))}</div>` : ''}` }
+  };
+  function reportLog(kind, recs, staff, year) {
+    const L = LOG[kind];
+    const shortRange = r => TH_M.reduce((t, m, i) => t.replace(m, TH_MS[i]), thRange(r.startDate, r.endDate));
+    const groups = staff.map(s => ({ s, list: byDate(recs.filter(r => r.staffId === s.id)) })).filter(g => g.list.length);
+    const known = new Set(staff.map(s => s.id));
+    const orphan = byDate(recs.filter(r => !known.has(r.staffId))); if (orphan.length) groups.push({ s: { prefix: '', firstName: '(ไม่พบชื่อในระบบ)', lastName: '' }, list: orphan });
+    const nCols = 5 + (L.hours ? 2 : 0);
+    const build = () => `<table class="rp-log ${L.hours ? '' : 'no-h'}"><thead><tr><th class="c">ลำดับที่</th><th>ชื่อ-สกุล</th><th>${L.cols[0]}</th><th class="c">วันที่</th><th>${L.cols[1]}</th>${L.hours ? `<th class="c">${L.cols[2]}</th><th class="c">ชั่วโมงรวม</th>` : ''}</tr></thead><tbody>
+      ${groups.map((g, gi) => g.list.map((r, i) => `<tr class="${i ? 'g-next' : 'g-first'}">
+        <td class="c g">${i ? `<span class="g-cont">${gi + 1}</span>` : gi + 1}</td>
+        <td class="g">${i ? `<span class="g-cont">${esc(fullName(g.s))} (ต่อ)</span>` : esc(fullName(g.s))}</td>
+        <td>${L.main(r)}</td><td class="c nw">${esc(shortRange(r))}</td><td>${esc(r.organizer || '-')}</td>
+        ${L.hours ? `<td class="c">${r.hours ? esc(r.hours) : '-'}</td><td class="c g"><b>${i ? `<span class="g-cont">${sumHours(g.list)}</span>` : sumHours(g.list)}</b></td>` : ''}</tr>`).join('')).join('')
+        || `<tr><td colspan="${nCols}" class="c">ยังไม่มีรายการในปีงบประมาณนี้</td></tr>`}
+      </tbody></table>
+      <div class="rp-sum" style="margin-top:10px"><span>บุคลากร <b>${groups.length}</b> คน</span><span>รวม <b>${recs.length}</b> รายการ</span>${L.hours ? `<span>รวม <b>${sumHours(recs).toLocaleString('th-TH')}</b> ชั่วโมง</span>` : ''}</div>`;
+    openReport({ title: L.title, subtitle: `ปีงบประมาณ พ.ศ. ${year}`, build, landscape: true, filename: `${L.file} ปีงบประมาณ ${year}` });
   }
 
   function reportStaffList(list) {
