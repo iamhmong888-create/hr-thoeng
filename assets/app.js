@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261110a';
+  const APP_VERSION = '20261110c';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -451,8 +451,13 @@
   function demoBar() { return `<div class="demo-bar">โหมดทดลอง: ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ใส่ค่า FIREBASE ใน config.js เพื่อใช้งานจริง</div>`; }
 
   // เมนูหลายแถวบนจอเล็ก (ผู้บริหารมีเมนูมาก): ถ้าแถบเมนูสูงเกินไป ไม่ตรึงไว้ด้านบน เพื่อไม่ให้บังเนื้อหา
-  function fitAppbar() { const ab = $('.appbar'); if (ab) ab.classList.toggle('tall', ab.offsetHeight > window.innerHeight * 0.36); }
+  function fitAppbar() {
+    // เมนูที่ขึ้นบรรทัดใหม่ (จอเล็ก) ไม่ต้องมีเส้นคั่นด้านหน้า
+    let prev = null; $$('.tab').forEach(t => { t.classList.toggle('lead', !!prev && t.offsetTop !== prev.offsetTop); prev = t; });
+    const ab = $('.appbar'); if (ab) ab.classList.toggle('tall', ab.offsetHeight > window.innerHeight * 0.36);
+  }
   window.addEventListener('resize', () => fitAppbar());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitAppbar()); // ฟอนต์โหลดเสร็จ เมนูอาจขึ้นบรรทัดใหม่ต่างไป
   function render() {
     let tabs = TABS[S.role];
     if (S.role === 'admin' && !S.user.isAdminAccount) tabs = tabs.filter(t => t[0] !== 'password').concat([['profile', 'ประวัติส่วนตัวของฉัน'], ...KINDS.map(k => [KIND[k].tab, KIND[k].mine]), ['leave', 'การลาของฉัน'], ['password', 'เปลี่ยนรหัสผ่าน']]);
@@ -904,9 +909,11 @@
       </div>
       <section class="panel"><h3>ตารางบันทึกของบุคลากร ปีงบประมาณ ${esc(S.fy)}</h3>
         <p class="small muted" style="margin:0 0 .7rem">ตารางรวมทุกคนตามแบบฟอร์มของหน่วยงาน (กระดาษ A4 แนวนอน หัวตารางพิมพ์ซ้ำทุกหน้า) กดแล้วดูตัวอย่างก่อน จากนั้นเลือกบันทึกไฟล์ PDF หรือสั่งพิมพ์</p>
-        <div class="toolbar"><button class="btn" data-log="dev">ตารางการเข้ารับการพัฒนาศักยภาพ (${recs.length})</button>
-          <button class="btn" data-log="speaker">ตารางการได้รับเป็นวิทยากร (${talks.length})</button>
-          <button class="btn" data-log="award">ตารางการรับโล่หรือรางวัล (${awards.length})</button></div>
+        <div class="log-btns">
+          <button class="log-btn lb-dev" data-log="dev"><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg></span><span class="lb-tx"><b>การเข้ารับการพัฒนาศักยภาพ</b><small>${recs.length} รายการ · ${sumHours(recs).toLocaleString('th-TH')} ชั่วโมง</small></span><span class="lb-go" aria-hidden="true">›</span></button>
+          <button class="log-btn lb-sp" data-log="speaker"><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></span><span class="lb-tx"><b>การได้รับเป็นวิทยากร</b><small>${talks.length} รายการ · ${sumHours(talks).toLocaleString('th-TH')} ชั่วโมง</small></span><span class="lb-go" aria-hidden="true">›</span></button>
+          <button class="log-btn lb-aw" data-log="award"><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/></svg></span><span class="lb-tx"><b>การรับโล่หรือรางวัล</b><small>${awards.length} รายการ · ${new Set(awards.map(r => r.staffId)).size} คน</small></span><span class="lb-go" aria-hidden="true">›</span></button>
+        </div>
       </section>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
         ${projs.length || pc.OTHER ? `<div class="table-wrap"><table><thead><tr><th>โครงการ</th><th class="r">ผู้เข้าร่วม (คน)</th><th class="r">รายการ</th></tr></thead><tbody>
@@ -1071,11 +1078,8 @@
     .rp-root table.rp-log tr th:nth-child(1){width:6%}.rp-root table.rp-log tr th:nth-child(2){width:17%}.rp-root table.rp-log tr th:nth-child(3){width:33%}
     .rp-root table.rp-log tr th:nth-child(4){width:13%}.rp-root table.rp-log tr th:nth-child(5){width:17%}.rp-root table.rp-log tr th:nth-child(6),.rp-root table.rp-log tr th:nth-child(7){width:7%}
     .rp-root table.rp-log.no-h tr th:nth-child(3){width:44%}.rp-root table.rp-log.no-h tr th:nth-child(5){width:20%}
-    .rp-root table.rp-log tr.g-next td.g{border-top-color:transparent}
+    .rp-root table.rp-log tr td.g{vertical-align:middle}
     .rp-root table.rp-log tr.g-first td{border-top:1.5px solid #6b7685}
-    .rp-root table.rp-log .g-cont{display:none;color:#555}
-    .rp-root table.rp-log tbody tr.g-next:first-child td.g{border-top-color:#9aa4b2}
-    .rp-root table.rp-log tbody tr:first-child .g-cont{display:inline}
     .rp-root .rp-empty{color:#666;text-align:center;padding:16px;border:1px dashed #bbb}`;
 
   function thToday() { const d = new Date(); return `${d.getDate()} ${TH_M[d.getMonth()]} ${d.getFullYear() + 543}`; }
@@ -1100,18 +1104,38 @@
   }
 
   // ตัดตารางให้พอดีพื้นที่ที่เหลือในหน้า: แถวที่ไม่พอย้ายไปตารางใหม่ (มีหัวตารางซ้ำ) ต่อหน้าถัดไป
+  // ตารางบันทึก (rp-log): ผสานเซลล์ ลำดับ / ชื่อ / ชั่วโมงรวม ของคนเดียวกัน (rowspan) ใหม่หลังแบ่งหน้า
+  // คนที่รายการข้ามหน้า: หน้าใหม่ผสานเซลล์ใหม่และแสดงชื่อพร้อม "(ต่อ)"
+  function fixLog(t) {
+    const tb = t.tBodies[0]; if (!tb) return;
+    const rows = [...tb.rows].filter(tr => tr.dataset.g !== undefined);
+    rows.forEach(tr => [...tr.cells].filter(td => td.classList.contains('g')).forEach(td => td.remove()));
+    const cnt = {}; rows.forEach(tr => cnt[tr.dataset.g] = (cnt[tr.dataset.g] || 0) + 1);
+    const seen = new Set(), doc = t.ownerDocument;
+    rows.forEach(tr => {
+      const g = tr.dataset.g; if (seen.has(g)) return; seen.add(g);
+      const cell = (cls, html) => { const td = doc.createElement('td'); td.className = cls; td.rowSpan = cnt[g]; td.innerHTML = html; return td; };
+      const nameEl = doc.createElement('span'); nameEl.textContent = tr.dataset.name + (tr.dataset.first ? '' : ' (ต่อ)');
+      tr.insertBefore(cell('g', ''), tr.firstChild).appendChild(nameEl);
+      tr.insertBefore(cell('c g', tr.dataset.seq), tr.firstChild);
+      if (tr.dataset.total !== undefined) tr.appendChild(cell('c g', `<b>${tr.dataset.total}</b>`));
+    });
+  }
   function splitTableToFit(t, room) {
     const tb = t.tBodies[0];
     if (!tb || tb.rows.length < 2) return null;
+    const log = t.classList.contains('rp-log');
     const rest = t.cloneNode(false);
     if (t.tHead) rest.appendChild(t.tHead.cloneNode(true));
     const rb = t.ownerDocument.createElement('tbody'); rest.appendChild(rb);
     t.after(rest);
-    while (t.getBoundingClientRect().height > room && tb.rows.length > 1) rb.insertBefore(tb.rows[tb.rows.length - 1], rb.firstChild);
+    while (t.getBoundingClientRect().height > room && tb.rows.length > 1) { rb.insertBefore(tb.rows[tb.rows.length - 1], rb.firstChild); if (log) fixLog(t); }
     if (t.getBoundingClientRect().height > room || !rb.rows.length) {
       while (rb.rows.length) tb.appendChild(rb.rows[0]);
+      if (log) fixLog(t);
       rest.remove(); return null;
     }
+    if (log) fixLog(rest);
     return rest;
   }
 
@@ -1358,11 +1382,10 @@
     const orphan = byDate(recs.filter(r => !known.has(r.staffId))); if (orphan.length) groups.push({ s: { prefix: '', firstName: '(ไม่พบชื่อในระบบ)', lastName: '' }, list: orphan });
     const nCols = 5 + (L.hours ? 2 : 0);
     const build = () => `<table class="rp-log ${L.hours ? '' : 'no-h'}"><thead><tr><th class="c">ลำดับที่</th><th>ชื่อ-สกุล</th><th>${L.cols[0]}</th><th class="c">วันที่</th><th>${L.cols[1]}</th>${L.hours ? `<th class="c">${L.cols[2]}</th><th class="c">ชั่วโมงรวม</th>` : ''}</tr></thead><tbody>
-      ${groups.map((g, gi) => g.list.map((r, i) => `<tr class="${i ? 'g-next' : 'g-first'}">
-        <td class="c g">${i ? `<span class="g-cont">${gi + 1}</span>` : gi + 1}</td>
-        <td class="g">${i ? `<span class="g-cont">${esc(fullName(g.s))} (ต่อ)</span>` : esc(fullName(g.s))}</td>
+      ${groups.map((g, gi) => g.list.map((r, i) => `<tr class="${i ? 'g-next' : 'g-first'}" data-g="${gi}" data-seq="${gi + 1}" data-name="${esc(fullName(g.s))}"${L.hours ? ` data-total="${sumHours(g.list)}"` : ''}${i ? '' : ' data-first="1"'}>
+        ${i ? '' : `<td class="c g" rowspan="${g.list.length}">${gi + 1}</td><td class="g" rowspan="${g.list.length}">${esc(fullName(g.s))}</td>`}
         <td>${L.main(r)}</td><td class="c nw">${esc(shortRange(r))}</td><td>${esc(r.organizer || '-')}</td>
-        ${L.hours ? `<td class="c">${r.hours ? esc(r.hours) : '-'}</td><td class="c g"><b>${i ? `<span class="g-cont">${sumHours(g.list)}</span>` : sumHours(g.list)}</b></td>` : ''}</tr>`).join('')).join('')
+        ${L.hours ? `<td class="c">${r.hours ? esc(r.hours) : '-'}</td>${i ? '' : `<td class="c g" rowspan="${g.list.length}"><b>${sumHours(g.list)}</b></td>`}` : ''}</tr>`).join('')).join('')
         || `<tr><td colspan="${nCols}" class="c">ยังไม่มีรายการในปีงบประมาณนี้</td></tr>`}
       </tbody></table>
       <div class="rp-sum" style="margin-top:10px"><span>บุคลากร <b>${groups.length}</b> คน</span><span>รวม <b>${recs.length}</b> รายการ</span>${L.hours ? `<span>รวม <b>${sumHours(recs).toLocaleString('th-TH')}</b> ชั่วโมง</span>` : ''}</div>`;
