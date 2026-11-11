@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261110c';
+  const APP_VERSION = '20261111a';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -350,6 +350,7 @@
     S.role = d.role; S.user = d.user; S.cache = {}; S.authUid = d.uid || null; clearCache();
     S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
+    if (S.role !== 'admin') myFy();
     S.tab = store.get('hr_tab_' + S.role) || (S.role === 'admin' ? 'overview' : 'profile');
     S.pending = noPending();
     render();
@@ -488,8 +489,24 @@
     { t: 'เงินเดือนและเครื่องราชอิสริยาภรณ์', f: [['salary', 'เงินเดือน', { lock: 1, type: 'money' }], ['insignia', 'เครื่องราชอิสริยาภรณ์']] }
   ];
   const ADMIN_ONLY = [['role', 'สิทธิ์การใช้งาน', { type: 'role' }]];
+  const WORK_FIELDS = [['startYear', 'เริ่มปฏิบัติงานปีงบประมาณ', { type: 'fy', empty: 'ก่อนเริ่มใช้ระบบ (ทุกปี)' }], ['status', 'สถานะ', { type: 'status' }], ['endYear', 'ปฏิบัติงานถึงปีงบประมาณ (ปีสุดท้าย)', { type: 'fy', empty: '— เลือกปีงบประมาณ —' }]];
+  /* ช่วงเวลาปฏิบัติงาน: บุคลากรแต่ละคนอยู่ในปีงบประมาณใดบ้าง (คนเข้า-ออกแต่ละปี)
+     startYear = เริ่มปีงบ (ว่าง = ตั้งแต่ก่อนมีระบบ) · status = ''|moved|resigned|retired|other · endYear = ปีงบสุดท้ายที่ปฏิบัติงาน */
+  const STATUS = { '': 'ปฏิบัติงานอยู่', moved: 'ย้ายออก', resigned: 'ลาออก', retired: 'เกษียณอายุราชการ', other: 'พ้นจากหน่วยงาน (อื่น ๆ)' };
+  const isLeft = s => !!(s && s.status && STATUS[s.status] !== undefined && s.status !== '');
+  const activeIn = (s, y) => !y || ((!s.startYear || s.startYear <= y) && (!isLeft(s) || !s.endYear || s.endYear >= y));
+  const statusText = s => isLeft(s) ? `${STATUS[s.status]}${s.endYear ? ` (ปฏิบัติงานถึงปีงบประมาณ ${s.endYear})` : ''}` : 'ปฏิบัติงานอยู่';
+  const statusChip = s => isLeft(s) ? `<span class="chip warn">${esc(STATUS[s.status])}${s.endYear ? ` · ถึงปีงบ ${esc(s.endYear)}` : ''}</span>` : '';
+  // ปีงบประมาณที่ผู้ใช้ปัจจุบันบันทึกข้อมูลของตนเองได้ (คนที่ออกแล้วบันทึกย้อนหลังได้เฉพาะปีที่ปฏิบัติงาน)
+  const myYears = () => { const ys = S.meta.years.filter(y => activeIn(S.user, y)); return ys.length ? ys : S.meta.years.slice(); };
+  const myFy = () => { const ys = myYears(); if (!ys.includes(S.fy)) S.fy = ys.slice().sort().reverse()[0]; return S.fy; };
+  const leftNotice = () => isLeft(S.user) ? `<div class="notice info no-print"><div class="grow">สถานะ: <b>${esc(statusText(S.user))}</b> · ยังเข้าระบบเพื่อดูและบันทึกข้อมูลย้อนหลังได้ในปีงบประมาณที่ปฏิบัติงาน</div></div>` : '';
 
   function profileHTML(u) {
+    const work = `<section class="panel"><h3>การปฏิบัติงานในหน่วยงาน</h3><dl class="dl"><div><dt>เริ่มปฏิบัติงาน</dt><dd>${u.startYear ? 'ปีงบประมาณ พ.ศ. ' + esc(u.startYear) : 'ก่อนเริ่มใช้ระบบ'}</dd></div><div><dt>สถานะ</dt><dd>${esc(statusText(u))}</dd></div></dl></section>`;
+    return profileBody(u) + work;
+  }
+  function profileBody(u) {
     const val = (k, o = {}) => {
       let v = k === 'birth' ? birthText(u) : u[k];
       if (o.type === 'money' && v) v = money(v);
@@ -500,7 +517,7 @@
 
   function viewProfile(v, u = S.user) {
     const initial = (u.firstName || '?').trim().charAt(0);
-    v.innerHTML = `
+    v.innerHTML = `${u === S.user ? leftNotice() : ''}
       ${u.canChangePassword && !S.user.isAdminAccount ? `<div class="notice info no-print"><div class="grow">ขณะนี้รหัสผ่านของคุณคือ <b>เบอร์โทรศัพท์</b> เปลี่ยนเป็นรหัสผ่านของคุณเองได้ 1 ครั้ง</div><button class="btn sm" id="go-pw">เปลี่ยนรหัสผ่าน</button></div>` : ''}
       <div class="page-head"><div class="grow profile-hero"><div class="avatar" aria-hidden="true">${esc(initial)}</div>
         <div><h1>${esc(fullName(u))}</h1><div class="muted">${esc([u.position, u.education && 'วุฒิ ' + u.education, u.major].filter(Boolean).join(' · ') || 'บุคลากร')}</div></div></div>
@@ -523,16 +540,27 @@
           <select id="pf-birthMonth" aria-label="เดือน"><option value="">เดือน</option><option value="-" ${u.birthMonth === '-' ? 'selected' : ''}>ไม่มีเดือนเกิด</option>${TH_M.map((m, i) => `<option value="${i + 1}" ${Number(u.birthMonth) === i + 1 ? 'selected' : ''}>${m}</option>`).join('')}</select>
           <input type="number" id="pf-birthYear" aria-label="ปี พ.ศ." placeholder="พ.ศ." min="2470" max="2600" value="${esc(u.birthYear || '')}"></div>`;
       } else if (o.type === 'textarea') ctl = `<textarea id="pf-${k}" rows="2" ${locked ? 'disabled' : ''}>${val}</textarea>`;
+      else if (o.type === 'fy') ctl = `<select id="pf-${k}"><option value="">${o.empty}</option>${S.meta.years.concat(u[k] && !S.meta.years.includes(u[k]) ? [u[k]] : []).map(y => `<option value="${y}" ${u[k] === y ? 'selected' : ''}>ปีงบประมาณ พ.ศ. ${y}</option>`).join('')}</select>`;
+      else if (o.type === 'status') ctl = `<select id="pf-${k}">${Object.keys(STATUS).map(x => `<option value="${x}" ${(u.status || '') === x ? 'selected' : ''}>${STATUS[x]}</option>`).join('')}</select>`;
       else if (o.type === 'role') ctl = `<select id="pf-${k}"><option value="">ครู/บุคลากร</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>ผู้บริหาร (เห็นข้อมูลทุกคน)</option></select>`;
       else ctl = `<input type="${o.type === 'tel' ? 'tel' : o.type === 'email' ? 'email' : 'text'}" id="pf-${k}" value="${val}" ${locked ? 'disabled' : ''}>`;
       return `<label class="field ${o.wide ? 'wide' : ''}"><span>${l}${locked ? ' (แก้ไขโดยผู้ดูแล)' : ''}${k === 'firstName' ? ' <span class="req">* ใช้เป็นชื่อผู้ใช้เข้าระบบ</span>' : ''}</span>${ctl}</label>`;
     };
-    const groups = asAdmin ? GROUPS.concat([{ t: 'สิทธิ์', f: ADMIN_ONLY }]) : GROUPS;
+    const groups = asAdmin ? GROUPS.concat([{ t: 'การปฏิบัติงานในหน่วยงาน', f: WORK_FIELDS }, { t: 'สิทธิ์', f: ADMIN_ONLY }]) : GROUPS;
     const m = modal({
       title: isNew ? 'เพิ่มบุคลากร' : 'แก้ไขข้อมูล: ' + fullName(u),
       body: groups.map(g => `<fieldset style="border:0;padding:0;margin:0"><h3 style="margin-bottom:.6rem">${g.t}</h3><div class="grid">${g.f.map(f => input(...f)).join('')}</div></fieldset>`).join(''),
       foot: `<button class="btn" data-close>ยกเลิก</button><button class="btn primary" id="pf-save">บันทึก</button>`
     });
+    // สถานะ "ปฏิบัติงานอยู่" ไม่ต้องเลือกปีสุดท้าย
+    const stEl = $('#pf-status', m.el), endF = $('#pf-endYear', m.el) && $('#pf-endYear', m.el).closest('.field');
+    const syncEnd = () => {
+      if (!stEl || !endF) return;
+      endF.hidden = !stEl.value;
+      const e = $('#pf-endYear', m.el);
+      if (stEl.value && !e.value) { const prev = String(Number(curFY()) - 1); e.value = S.meta.years.includes(prev) ? prev : (S.meta.years.includes(curFY()) ? curFY() : ''); }
+    };
+    if (stEl) { stEl.onchange = syncEnd; syncEnd(); }
     $('#pf-save', m.el).onclick = async () => {
       const data = isNew ? {} : { id: u.id };
       groups.forEach(g => g.f.forEach(([k, , o = {}]) => {
@@ -540,6 +568,11 @@
         const el = $('#pf-' + k, m.el); if (el && !el.disabled) data[k] = el.value;
       }));
       if (!String(data.firstName || '').trim()) return toast('กรุณากรอกชื่อ', true);
+      if (asAdmin && stEl) {
+        if (!data.status) data.endYear = '';
+        else if (!data.endYear) return toast('กรุณาเลือกปีงบประมาณสุดท้ายที่ปฏิบัติงาน', true);
+        if (data.startYear && data.endYear && data.endYear < data.startYear) return toast('ปีงบประมาณสุดท้ายต้องไม่ก่อนปีที่เริ่มปฏิบัติงาน', true);
+      }
       if (!isNew && !asAdmin && String(data.firstName).replace(/\s+/g, '') !== String(u.firstName || '').replace(/\s+/g, '')
         && !(await confirmBox(`ชื่อใช้เป็นชื่อผู้ใช้เข้าระบบ ถ้าเปลี่ยนเป็น “${String(data.firstName).trim()}” ครั้งต่อไปต้องเข้าระบบด้วยชื่อใหม่ (รหัสผ่านเดิม) ยืนยันหรือไม่?`, 'ยืนยันเปลี่ยนชื่อ', false))) return;
       try {
@@ -580,7 +613,7 @@
   }
 
   /* ---------------- dev records (teacher) ---------------- */
-  const yearSelect = (id, val, extraAll) => `<select id="${id}">${extraAll ? '<option value="">ทุกปีงบประมาณ</option>' : ''}${S.meta.years.map(y => `<option value="${y}" ${y === val ? 'selected' : ''}>ปีงบประมาณ พ.ศ. ${y}</option>`).join('')}</select>`;
+  const yearSelect = (id, val, extraAll, years = S.meta.years) => `<select id="${id}">${extraAll ? '<option value="">ทุกปีงบประมาณ</option>' : ''}${years.map(y => `<option value="${y}" ${y === val ? 'selected' : ''}>ปีงบประมาณ พ.ศ. ${y}</option>`).join('')}</select>`;
 
   const REVIEW = { approved: ['good', 'ตรวจแล้ว'], revise: ['bad', 'ส่งกลับแก้ไข'], '': ['warn', 'รอตรวจ'] };
   const reviewChip = r => { const [c, t] = REVIEW[r.review || ''] || REVIEW['']; return `<span class="chip ${c}">${t}</span>`; };
@@ -711,8 +744,9 @@
   // หน้าของครู: การพัฒนาตนเอง / รายงานโล่/รางวัล / รายการวิทยากร
   async function viewKind(v, kind) {
     const K = KIND[kind];
-    v.innerHTML = `<div class="page-head"><div class="grow"><h1>${K.head}</h1><div class="muted small">${K.desc}</div></div>
-      <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('dev-fy', S.fy)}</label></div></div>
+    myFy();
+    v.innerHTML = `${leftNotice()}<div class="page-head"><div class="grow"><h1>${K.head}</h1><div class="muted small">${K.desc}</div></div>
+      <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('dev-fy', S.fy, false, myYears())}</label></div></div>
       <div id="dev-body" class="stack" data-kind="${kind}"><div class="empty-state">กำลังโหลด…</div></div>`;
     $('#dev-fy').onchange = e => { S.fy = e.target.value; S.devProj = ''; loadKind(kind); };
     loadKind(kind);
@@ -792,7 +826,7 @@
       title: isNew ? K.addTitle : K.editTitle,
       body: `${r.review === 'approved' ? '<div class="notice info"><div class="grow">รายการนี้ผู้บริหารตรวจแล้ว ถ้าบันทึกการแก้ไข สถานะจะกลับเป็น “รอตรวจ”</div></div>' : ''}${r.review === 'revise' ? `<div class="review-note revise"><b>สิ่งที่ต้องแก้ไข</b><div>${esc(r.reviewNote || '')}</div></div>` : ''}
       <div class="grid">
-        <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('rf-year', r.year || S.fy)}</label>
+        <label class="field"><span>ปีงบประมาณ <span class="req">*</span></span>${yearSelect('rf-year', r.year || S.fy, false, myYears().concat(r.year && !myYears().includes(r.year) ? [r.year] : []))}</label>
         ${K.project ? `<label class="field wide"><span>โครงการพัฒนาบุคลากร <span class="req">*</span></span><select id="rf-proj">${projOpts(r.year || S.fy)}</select></label>
         <label class="field wide" id="rf-other-f"><span>ชื่อโครงการ <span class="req">*</span></span><input type="text" id="rf-other" value="${esc(r.otherProject || (r.projectId === 'OTHER' && r.projectName !== 'โครงการอื่น ๆ' && r.projectName !== 'อื่น ๆ (นอกโครงการ)' ? r.projectName || '' : ''))}" placeholder="พิมพ์ชื่อโครงการที่เข้าร่วม"></label>` : ''}
         <label class="field"><span>${K.typeLabel} <span class="req">*</span></span><select id="rf-type">${types.map(t => `<option ${t === r.type ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
@@ -888,6 +922,8 @@
     let staff, recs, allRecs;
     try { [staff, allRecs] = await busy(() => Promise.all([getStaff(), api('listRecords', { year: S.fy })])); } catch (e) { return; }
     if (!v.isConnected) return;
+    // เฉพาะบุคลากรที่ปฏิบัติงานในปีงบประมาณที่เลือก (และคนที่มีรายการในปีนั้น)
+    staff = staff.filter(s => activeIn(s, S.fy) || allRecs.some(r => r.staffId === s.id));
     recs = ofKind(allRecs, 'dev');
     const awards = ofKind(allRecs, 'award'), talks = ofKind(allRecs, 'speaker');
     const by = {}; recs.forEach(r => (by[r.staffId] = by[r.staffId] || []).push(r));
@@ -938,7 +974,7 @@
     const m = modal({
       title: fullName(s),
       body: `<div class="toolbar">${FB && !s.hasAccount ? '<span class="chip bad">ยังไม่มีบัญชีเข้าสู่ระบบ</span>' : `<span class="chip ${s.pwChanged ? 'good' : 'warn'}">${s.pwChanged ? 'เปลี่ยนรหัสผ่านแล้ว' : 'รหัสผ่านเริ่มต้น (เบอร์โทร)'}</span>`}
-        ${FB && s.hasAccount ? (s.loginEmail ? `<span class="chip">อีเมลรีเซ็ตรหัส: ${esc(s.loginEmail)}</span>` : '<span class="chip warn">บัญชีไม่มีอีเมล รีเซ็ตรหัสทางอีเมลไม่ได้</span>') : ''}${s.role === 'admin' ? '<span class="chip ink">ผู้บริหาร</span>' : ''}</div>
+        ${FB && s.hasAccount ? (s.loginEmail ? `<span class="chip">อีเมลรีเซ็ตรหัส: ${esc(s.loginEmail)}</span>` : '<span class="chip warn">บัญชีไม่มีอีเมล รีเซ็ตรหัสทางอีเมลไม่ได้</span>') : ''}${s.role === 'admin' ? '<span class="chip ink">ผู้บริหาร</span>' : ''}${statusChip(s)}</div>
         ${profileHTML(s)}
         ${KINDS.map(k => { const kl = ofKind(recs, k); if (k !== 'dev' && !kl.length) return ''; return `<section class="panel"><h3>${k === 'dev' ? 'ประวัติการพัฒนาตนเอง' : KIND[k].head} (${kl.length} รายการ${KIND[k].hours ? ` · ${sumHours(kl)} ชั่วโมง` : ''})</h3>
         ${kl.length ? years.filter(y => kl.some(r => r.year === y)).map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${kl.filter(r => r.year === y).map(r => recCard(r, { who: fullName(s), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`; }).join('')}`,
@@ -957,7 +993,7 @@
       try { const nu = await busy(() => api('recreateAccount', { id: s.id })); Object.assign(s, nu); toast(nu._msg || 'สร้างบัญชีแล้ว'); m.close(); S.cache = {}; staffDetail(s, reload); } catch (e) { }
     };
     $('#sd-del', m.el).onclick = async () => {
-      if (!(await confirmBox(`ลบ ${fullName(s)} ออกจากระบบ พร้อมรายการพัฒนาตนเองและรูปทั้งหมด? การลบนี้ย้อนกลับไม่ได้`, 'ลบบุคลากร'))) return;
+      if (!(await confirmBox(`ลบ ${fullName(s)} ออกจากระบบ พร้อมรายการพัฒนาตนเอง รางวัล วิทยากร การลา และรูปทั้งหมด? การลบนี้ย้อนกลับไม่ได้ — ถ้าบุคลากรย้าย ลาออก หรือเกษียณ แนะนำให้กด “แก้ไขข้อมูล” แล้วเปลี่ยนสถานะแทน เพื่อเก็บประวัติปีที่ผ่านมาไว้`, 'ลบบุคลากร'))) return;
       try { await busy(() => api('deleteStaff', { id: s.id })); toast('ลบบุคลากรแล้ว'); m.close(); S.cache = {}; reload && reload(); } catch (e) { }
     };
   }
@@ -965,24 +1001,28 @@
   async function viewStaff(v) {
     v.innerHTML = `<div class="page-head"><div class="grow"><h1>ข้อมูลบุคลากร</h1><div class="muted small" id="st-count"></div></div>
       <div class="actions"><button class="btn" id="st-pdf">ดู PDF</button><button class="btn accent" id="st-add">+ เพิ่มบุคลากร</button></div></div>
-      <div class="toolbar"><label class="field"><span>ค้นหา</span><input type="text" id="st-q" placeholder="ชื่อ นามสกุล วุฒิ วิชาเอก เบอร์โทร"></label></div>
+      <div class="toolbar"><label class="field" style="max-width:260px"><span>ปีงบประมาณ</span>${yearSelect('st-fy', S.fy, true)}</label>
+        <label class="field"><span>ค้นหา</span><input type="text" id="st-q" placeholder="ชื่อ นามสกุล วุฒิ วิชาเอก เบอร์โทร"></label></div>
       <div class="table-wrap"><table><thead><tr><th>#</th><th>ชื่อ-สกุล</th><th>วุฒิ / วิชาเอก</th><th>เบอร์โทร</th><th>อายุ</th><th>เงินเดือน</th><th>รหัสผ่าน</th></tr></thead><tbody id="st-body"></tbody></table></div>`;
     let staff; try { staff = await busy(() => getStaff(true)); } catch (e) { return; }
     if (!v.isConnected) return;
+    const shownList = () => {
+      const q = $('#st-q').value.trim().toLowerCase(), y = $('#st-fy').value;
+      return staff.filter(s => activeIn(s, y) && (!q || [fullName(s), s.education, s.major, s.phone, s.position].join(' ').toLowerCase().includes(q)));
+    };
     const draw = () => {
-      const q = $('#st-q').value.trim().toLowerCase();
-      const list = staff.filter(s => !q || [fullName(s), s.education, s.major, s.phone, s.position].join(' ').toLowerCase().includes(q));
-      $('#st-count').textContent = `ทั้งหมด ${staff.length} คน${q ? ` · พบ ${list.length} คน` : ''}`;
-      $('#st-body').innerHTML = list.map((s, i) => `<tr class="click" data-id="${esc(s.id)}"><td class="num muted">${i + 1}</td><td><b>${esc(fullName(s))}</b>${s.role === 'admin' ? ' <span class="chip ink">ผู้บริหาร</span>' : ''}${s.position ? `<div class="small muted">${esc(s.position)}</div>` : ''}</td>
+      const q = $('#st-q').value.trim(), y = $('#st-fy').value;
+      const list = shownList(), inYear = staff.filter(s => activeIn(s, y)).length;
+      $('#st-count').textContent = `${y ? `ปีงบประมาณ ${y}: ${inYear} คน` : `ทุกปีงบประมาณ: ${staff.length} คน (ปฏิบัติงานอยู่ ${staff.filter(s => !isLeft(s)).length} คน)`}${q ? ` · พบ ${list.length} คน` : ''}`;
+      $('#st-body').innerHTML = list.map((s, i) => `<tr class="click" data-id="${esc(s.id)}"><td class="num muted">${i + 1}</td><td><b>${esc(fullName(s))}</b>${s.role === 'admin' ? ' <span class="chip ink">ผู้บริหาร</span>' : ''} ${statusChip(s)}${s.position ? `<div class="small muted">${esc(s.position)}</div>` : ''}</td>
         <td>${esc(s.education || '—')}<div class="small muted">${esc(s.major || '')}</div></td><td class="num">${esc(s.phone || '—')}</td><td class="num">${age(s) || '—'}</td>
         <td class="num">${s.salary ? esc(Number(s.salary).toLocaleString('th-TH')) : '—'}</td><td>${s.pwChanged ? '<span class="chip good">เปลี่ยนแล้ว</span>' : '<span class="chip">เบอร์โทร</span>'}</td></tr>`).join('') || `<tr><td colspan="7" class="muted">ไม่พบข้อมูล</td></tr>`;
       $$('#st-body tr.click').forEach(tr => tr.onclick = () => staffDetail(staff.find(s => s.id === tr.dataset.id), () => viewStaff(v)));
     };
-    $('#st-q').oninput = draw; draw();
+    $('#st-q').oninput = draw; $('#st-fy').onchange = e => { if (e.target.value) S.fy = e.target.value; draw(); }; draw();
     $('#st-add').onclick = () => editProfile({}, true, () => viewStaff(v));
     $('#st-pdf').onclick = () => {
-      const q = $('#st-q').value.trim().toLowerCase();
-      reportStaffList(staff.filter(s => !q || [fullName(s), s.education, s.major, s.phone, s.position].join(' ').toLowerCase().includes(q)));
+      reportStaffList(shownList());
     };
   }
 
@@ -997,7 +1037,7 @@
         <label class="field"><span>ปีงบประมาณ</span>${yearSelect('rc-fy', S.fy, true)}</label>
         ${K.project ? '<label class="field"><span>โครงการ</span><select id="rc-proj"></select></label>' : ''}
         ${K.level ? `<label class="field"><span>ระดับรางวัล</span><select id="rc-level"><option value="">ทุกระดับ</option>${AWARD_LEVELS.map(t => `<option>${t}</option>`).join('')}</select></label>` : ''}
-        <label class="field"><span>บุคลากร</span><select id="rc-staff"><option value="">ทุกคน</option>${staff.map((s, i) => `<option value="${esc(s.id)}">${i + 1}. ${esc(fullName(s))}</option>`).join('')}</select></label>
+        <label class="field"><span>บุคลากร</span><select id="rc-staff"></select></label>
         <label class="field"><span>${K.typeLabel}</span><select id="rc-type"><option value="">ทุกประเภท</option>${K.types.map(t => `<option>${t}</option>`).join('')}</select></label>
         <label class="field"><span>สถานะการตรวจ</span><select id="rc-rv"><option value="all">ทุกสถานะ</option><option value="">รอตรวจ</option><option value="approved">ตรวจแล้ว</option><option value="revise">ส่งกลับแก้ไข</option></select></label>
       </div><div id="rc-body" class="stack"></div>`;
@@ -1031,7 +1071,13 @@
       $('#rc-body').innerHTML = list.length ? `<div class="recs">${list.map(r => recCard(r, { who: name(r.staffId), mode: r.staffId === S.user.id ? 'view' : 'review', isNew: r._new })).join('')}</div>` : `<div class="empty-state">ไม่พบรายการตามเงื่อนไขที่เลือก</div>`;
       bindRecList($('#rc-body'), list, load);
     };
-    $('#rc-fy').onchange = () => { fillProj(); load(); };
+    const fillStaff = () => {
+      const y = $('#rc-fy').value, cur = $('#rc-staff').value;
+      const list = staff.filter(s => activeIn(s, y) || s.id === cur || all.some(r => r.staffId === s.id));
+      $('#rc-staff').innerHTML = '<option value="">ทุกคน</option>' + list.map((s, i) => `<option value="${esc(s.id)}" ${s.id === cur ? 'selected' : ''}>${i + 1}. ${esc(fullName(s))}${isLeft(s) ? ` (${STATUS[s.status]})` : ''}</option>`).join('');
+    };
+    fillStaff();
+    $('#rc-fy').onchange = () => { fillProj(); fillStaff(); load(); };
     ['#rc-proj', '#rc-level', '#rc-staff', '#rc-type', '#rc-rv'].forEach(id => { const x = $(id); if (x) x.onchange = draw; });
     $('#rc-pdf').onclick = () => {
       const sel = id => { const x = $(id); const o = x && x.selectedOptions[0]; return o && o.value ? o.textContent : ''; };
@@ -1469,8 +1515,9 @@
 
   // หน้าของครู (และ "การลาของฉัน" ของผู้บริหาร): ดูอย่างเดียว
   async function viewLeave(v) {
-    v.innerHTML = `<div class="page-head"><div class="grow"><h1>การลา</h1><div class="muted small">ข้อมูลการลาที่งานบุคลากรบันทึกไว้ กรุณาตรวจสอบความถูกต้อง</div></div>
-      <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('lv-fy', S.fy)}</label></div></div>
+    myFy();
+    v.innerHTML = `${leftNotice()}<div class="page-head"><div class="grow"><h1>การลา</h1><div class="muted small">ข้อมูลการลาที่งานบุคลากรบันทึกไว้ กรุณาตรวจสอบความถูกต้อง</div></div>
+      <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('lv-fy', S.fy, false, myYears())}</label></div></div>
       <div id="lv-body" class="stack"><div class="empty-state">กำลังโหลด…</div></div>`;
     $('#lv-fy').onchange = e => { S.fy = e.target.value; viewLeave(v); };
     if (!S.meta.years.length) { $('#lv-body').innerHTML = '<div class="empty-state">ยังไม่มีปีงบประมาณในระบบ</div>'; return; }
@@ -1498,6 +1545,7 @@
     if (!v.isConnected) return;
     const reload = () => viewLeaves(v);
     const list = all.filter(l => l.year === S.fy);
+    staff = staff.filter(s => activeIn(s, S.fy) || list.some(l => l.staffId === s.id));
     const rows = staff.map(s => { const l = list.filter(x => x.staffId === s.id); return { s, list: l, sm: leaveSummary(l), b: vacBalance(s.id, S.fy, all, bals) }; });
     const cell = o => o.n ? `${fmtDays(o.d)} <span class="small muted">(${o.n})</span>` : '—';
     const draw = () => {

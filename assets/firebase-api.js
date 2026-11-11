@@ -13,9 +13,10 @@ import {
 
 const STAFF_FIELDS = ['id', 'prefix', 'firstName', 'lastName', 'position', 'citizenId', 'address', 'phone',
   'birthDay', 'birthMonth', 'birthYear', 'email', 'education', 'major', 'scoutQual', 'scoutType', 'scoutPosition',
-  'scoutFee', 'redCrossQual', 'redCrossDate', 'salary', 'insignia', 'role'];
-// ครูแก้ไขข้อมูลของตนเองได้ทุกช่อง ยกเว้นสิทธิ์การใช้งาน (role)
-const TEACHER_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id' && k !== 'role');
+  'scoutFee', 'redCrossQual', 'redCrossDate', 'salary', 'insignia', 'role', 'startYear', 'status', 'endYear'];
+// ครูแก้ไขข้อมูลของตนเองได้ทุกช่อง ยกเว้นสิทธิ์การใช้งาน (role) และช่วงเวลาปฏิบัติงาน/สถานะ (ผู้ดูแลเป็นผู้กำหนด)
+const ADMIN_SET = ['id', 'role', 'startYear', 'status', 'endYear'];
+const TEACHER_EDITABLE = STAFF_FIELDS.filter(k => !ADMIN_SET.includes(k));
 const ADMIN_EDITABLE = STAFF_FIELDS.filter(k => k !== 'id');
 const REC_FIELDS = ['kind', 'year', 'projectId', 'type', 'title', 'place', 'organizer', 'level', 'audience', 'startDate', 'endDate', 'hours', 'knowledge', 'apply', 'otherProject'];
 // ประเภทรายการ: dev = การพัฒนาตนเอง (รายการเดิมที่ไม่มี kind) · award = โล่/รางวัล · speaker = วิทยากร
@@ -473,7 +474,8 @@ export function create(CFG) {
         list.slice(i, i + 400).forEach(src => {
           if (!src || !src.id || !src.firstName) return;
           const s = { id: String(src.id).trim(), updatedAt: nowISO() };
-          ADMIN_EDITABLE.forEach(k => s[k] = src[k] === undefined || src[k] === null ? '' : String(src[k]).trim());
+          // ช่องที่ไม่มีในไฟล์ ไม่ทับข้อมูลเดิม (เช่น สถานะ/ปีงบที่ผู้ดูแลตั้งไว้)
+          ADMIN_EDITABLE.forEach(k => { if (src[k] !== undefined || !existing.has(String(src.id).trim())) s[k] = src[k] === undefined || src[k] === null ? '' : String(src[k]).trim(); });
           if (existing.has(s.id)) updated++; else { added++; s.pwChanged = false; }
           b.set(D('staff', s.id), s, { merge: true });
         });
