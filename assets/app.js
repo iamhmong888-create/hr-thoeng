@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261111a';
+  const APP_VERSION = '20261111b';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -970,17 +970,15 @@
   async function staffDetail(s, reload) {
     let recs;
     try { recs = await busy(() => api('listRecords', { staffId: s.id })); } catch (e) { return; }
-    const years = [...new Set(recs.map(r => r.year))].sort().reverse();
     const m = modal({
       title: fullName(s),
       body: `<div class="toolbar">${FB && !s.hasAccount ? '<span class="chip bad">ยังไม่มีบัญชีเข้าสู่ระบบ</span>' : `<span class="chip ${s.pwChanged ? 'good' : 'warn'}">${s.pwChanged ? 'เปลี่ยนรหัสผ่านแล้ว' : 'รหัสผ่านเริ่มต้น (เบอร์โทร)'}</span>`}
         ${FB && s.hasAccount ? (s.loginEmail ? `<span class="chip">อีเมลรีเซ็ตรหัส: ${esc(s.loginEmail)}</span>` : '<span class="chip warn">บัญชีไม่มีอีเมล รีเซ็ตรหัสทางอีเมลไม่ได้</span>') : ''}${s.role === 'admin' ? '<span class="chip ink">ผู้บริหาร</span>' : ''}${statusChip(s)}</div>
         ${profileHTML(s)}
-        ${KINDS.map(k => { const kl = ofKind(recs, k); if (k !== 'dev' && !kl.length) return ''; return `<section class="panel"><h3>${k === 'dev' ? 'ประวัติการพัฒนาตนเอง' : KIND[k].head} (${kl.length} รายการ${KIND[k].hours ? ` · ${sumHours(kl)} ชั่วโมง` : ''})</h3>
-        ${kl.length ? years.filter(y => kl.some(r => r.year === y)).map(y => `<h3 style="margin:.6rem 0">ปีงบประมาณ ${esc(y)}</h3><div class="recs">${kl.filter(r => r.year === y).map(r => recCard(r, { who: fullName(s), mode: r.staffId === S.user.id ? 'view' : 'review' })).join('')}</div>`).join('') : '<p class="muted" style="margin:0">ยังไม่มีรายการ</p>'}</section>`; }).join('')}`,
+        <section class="panel"><h3>สรุปผลงานทุกปีงบประมาณ</h3><div class="stats">${KINDS.map(k => { const kl = ofKind(recs, k); return `<div class="stat"><div class="v">${kl.length}<span class="small muted"> รายการ</span></div><div class="k">${KIND[k].head}${KIND[k].hours ? ` · ${sumHours(kl)} ชั่วโมง` : ''}</div></div>`; }).join('')}</div>
+          <p class="small muted" style="margin:.6rem 0 0">ดูรายละเอียดรายการได้ที่เมนู ${KINDS.map(k => `“${KIND[k].adminMenu}”`).join(' ')} (เลือกชื่อบุคลากรในตัวกรอง) หรือกด “ดู PDF”</p></section>`,
       foot: `<button class="btn danger" id="sd-del">ลบบุคลากร</button><button class="btn" id="sd-reset">${FB ? 'ส่งลิงก์รีเซ็ตรหัสผ่าน' : 'รีเซ็ตรหัสผ่าน'}</button>${FB ? '<button class="btn" id="sd-recreate">สร้างบัญชีใหม่</button>' : ''}<button class="btn" id="sd-pdf">ดู PDF</button><button class="btn primary" id="sd-edit">แก้ไขข้อมูล</button>`
     });
-    bindRecList(m.el, recs, () => { m.close(); staffDetail(s, reload); reload && reload(); });
     $('#sd-pdf', m.el).onclick = () => reportPerson(s, recs, { profile: true });
     $('#sd-edit', m.el).onclick = () => editProfile(s, true, nu => { m.close(); S.cache = {}; staffDetail(nu, reload); reload && reload(); });
     $('#sd-reset', m.el).onclick = async () => {
