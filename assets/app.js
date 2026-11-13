@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261113a';
+  const APP_VERSION = '20261113b';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -1137,6 +1137,10 @@
     .rp-root table.rp-log tr th:nth-child(1){width:6%}.rp-root table.rp-log tr th:nth-child(2){width:17%}.rp-root table.rp-log tr th:nth-child(3){width:33%}
     .rp-root table.rp-log tr th:nth-child(4){width:13%}.rp-root table.rp-log tr th:nth-child(5){width:17%}.rp-root table.rp-log tr th:nth-child(6),.rp-root table.rp-log tr th:nth-child(7){width:7%}
     .rp-root table.rp-log.no-h tr th:nth-child(3){width:44%}
+    .rp-root table.rp-staff{table-layout:fixed}.rp-root table.rp-staff tr td,.rp-root table.rp-staff tr th{font-size:12px;padding:3px 4px;overflow-wrap:anywhere}
+    .rp-root table.rp-staff tr th:nth-child(1){width:3%}.rp-root table.rp-staff tr th:nth-child(2){width:14.5%}.rp-root table.rp-staff tr th:nth-child(3){width:7.5%}.rp-root table.rp-staff tr th:nth-child(4){width:16%}
+    .rp-root table.rp-staff tr th:nth-child(5){width:8%}.rp-root table.rp-staff tr th:nth-child(6){width:4%}.rp-root table.rp-staff tr th:nth-child(7){width:8%}.rp-root table.rp-staff tr th:nth-child(8){width:6%}
+    .rp-root table.rp-staff tr th:nth-child(9){width:6%}.rp-root table.rp-staff tr th:nth-child(10){width:7%}.rp-root table.rp-staff tr th:nth-child(11){width:20%}
     .rp-root table.rp-slog tr th:nth-child(1){width:7%}.rp-root table.rp-slog tr th:nth-child(2){width:43%}.rp-root table.rp-slog tr th:nth-child(3){width:16%}.rp-root table.rp-slog tr th:nth-child(4){width:12%}.rp-root table.rp-slog tr th:nth-child(5){width:22%}.rp-root table.rp-log.no-h tr th:nth-child(5){width:20%}
     .rp-root table.rp-log tr td.g{vertical-align:middle}
     .rp-root table.rp-log tr.g-first td{border-top:1.5px solid #6b7685}
@@ -1493,10 +1497,10 @@
   }
 
   function reportStaffList(list) {
-    const body = `<table><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>วุฒิ / วิชาเอก</th><th>วันเกิด</th><th class="c">อายุ</th><th>เบอร์โทร</th><th class="r">เงินเดือน</th><th>เครื่องราชฯ</th><th>วุฒิลูกเสือ</th></tr></thead><tbody>
+    const body = `<table class="rp-staff"><thead><tr><th class="c">ที่</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>วุฒิ / วิชาเอก</th><th>วันเกิด</th><th class="c">อายุ</th><th>เบอร์โทร</th><th class="r">เงินเดือน</th><th>เครื่องราชฯ</th><th>วุฒิลูกเสือ</th><th>วุฒิทางยุวกาชาด</th></tr></thead><tbody>
       ${list.map((s, i) => `<tr><td class="c">${i + 1}</td><td>${esc(fullName(s))}</td><td>${esc(s.position || '-')}</td><td>${esc([s.education, s.major].filter(Boolean).join(' / ') || '-')}</td>
         <td>${esc([bDay(s) || (s.birthDay === '-' ? '-' : ''), Number(s.birthMonth) ? TH_MS[Number(s.birthMonth) - 1] : (s.birthMonth === '-' ? '-' : ''), s.birthYear].filter(Boolean).join(' ') || '-')}</td><td class="c">${age(s) || '-'}</td><td>${esc(s.phone || '-')}</td>
-        <td class="r">${s.salary && !isNaN(Number(s.salary)) ? Number(s.salary).toLocaleString('th-TH') : '-'}</td><td>${esc(s.insignia || '-')}</td><td>${esc(s.scoutQual || '-')}</td></tr>`).join('')}
+        <td class="r">${s.salary && !isNaN(Number(s.salary)) ? Number(s.salary).toLocaleString('th-TH') : '-'}</td><td>${esc(s.insignia || '-')}</td><td>${esc(s.scoutQual || '-')}</td><td>${esc(s.redCrossQual || '-')}</td></tr>`).join('')}
       </tbody></table>`;
     openReport({ title: 'ทะเบียนข้อมูลบุคลากร', subtitle: `จำนวน ${list.length} คน`, build: () => body, landscape: true, filename: 'ทะเบียนข้อมูลบุคลากร' });
   }
