@@ -93,6 +93,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // โล่/รางวัลของสถานศึกษา: ผู้ใช้ในระบบอ่านได้ บันทึก/แก้ไข/ลบได้เฉพาะผู้บริหาร/ผู้ดูแลระบบ
+    match /schoolAwards/{aid} {
+      allow read: if hasUser();
+      allow write: if isAdmin();
+    }
+    match /schoolPhotos/{aid} {
+      allow read: if hasUser();
+      allow write: if isAdmin();
+    }
+
     // รูปหลักฐาน (แยกเอกสาร เพื่อให้โหลดรายการได้เร็ว)
     match /photos/{rid} {
       allow read: if isAdmin() || (hasUser() && resource.data.staffId == mySid());
