@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261113c';
+  const APP_VERSION = '20261113d';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -126,13 +126,66 @@
   const NO_CLEAR = new Set(['getPhotos', 'setupStatus', 'me', 'forgotPassword', 'backupData']);
   const CACHE_MS = 5 * 60 * 1000;
   const apiCache = new Map();
-  const clearCache = action => { if (!action) { apiCache.clear(); return; } [...apiCache.keys()].forEach(k => { if (k.startsWith(action + '|')) apiCache.delete(k); }); };
+  /* จำข้อมูลไว้ในเครื่อง (IndexedDB) ข้ามการปิด-เปิดเว็บ ทั้งคอมและโทรศัพท์:
+     เปิดเว็บ/เมนูครั้งต่อไป แสดงข้อมูลที่จำไว้ทันที แล้วตรวจข้อมูลล่าสุดจากฐานข้อมูลอยู่เบื้องหลัง
+     ถ้ามีข้อมูลเปลี่ยน หน้าจอจะอัปเดตให้เอง · ล้างทั้งหมดเมื่อออกจากระบบ */
+  const DATA_DAYS = 14;
+  const dataDB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('no idb'));
+      const rq = indexedDB.open('hr-data', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('d');
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+    }).catch(e => { dbp = null; throw e; }));
+    const tx = async (mode, fn) => { const db = await open(); return new Promise((res, rej) => { const t = db.transaction('d', mode); const r = fn(t.objectStore('d')); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); }); };
+    return {
+      get: k => tx('readonly', st => st.get(k)).catch(() => null),
+      put: (k, v) => tx('readwrite', st => st.put(v, k)).catch(() => null),
+      delPrefix: pre => tx('readwrite', st => st.delete(IDBKeyRange.bound(pre, pre + '\uffff'))).catch(() => null),
+      clear: () => tx('readwrite', st => st.clear()).catch(() => null)
+    };
+  })();
+  const PERSIST = new Set(['listSchoolAwards', 'listRecords', 'listStaff', 'listLeaves', 'listLeaveBalances', 'meta']);
+  const userKey = () => FB && S.user ? String(S.authUid || S.user.id || '') : '';
+  const clearCache = action => {
+    const u = userKey();
+    if (!action) { apiCache.clear(); if (u) dataDB.delPrefix(u + '|'); return; }
+    [...apiCache.keys()].forEach(k => { if (k.startsWith(action + '|')) apiCache.delete(k); });
+    if (u) dataDB.delPrefix(u + '|' + action + '|');
+  };
+  const noteVer = (action, d) => { if ((action === 'listRecords' || action === 'listSchoolAwards') && Array.isArray(d)) d.forEach(r => { if (r.id) REC_VER[r.id] = r.updatedAt || r.createdAt || ''; }); return d; };
+  // ข้อมูลเบื้องหลังเปลี่ยน → วาดหน้าปัจจุบันใหม่ (ไม่รบกวนถ้ากำลังกรอกฟอร์ม/เปิดหน้าต่างอยู่)
+  let viewRefreshT = null;
+  function scheduleViewRefresh() {
+    clearTimeout(viewRefreshT);
+    viewRefreshT = setTimeout(() => {
+      if ($('.modal-back') || $('.pdf-busy') || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && $('#view').contains(document.activeElement))) return;
+      if (KINDS.some(k => KIND[k].adminTab === S.tab) && typeof S.recLive === 'function') return S.recLive();
+      const y = window.scrollY; S.cache = {};
+      if (typeof S.viewFn === 'function') { S.viewFn($('#view')); setTimeout(() => window.scrollTo(0, y), 60); }
+    }, 300);
+  }
   async function api(action, payload = {}, opt = {}) {
     if (READ_ACTIONS.has(action)) {
       const key = action + '|' + JSON.stringify(payload);
       const hit = apiCache.get(key);
       if (hit && !opt.fresh && Date.now() - hit.t < CACHE_MS) return hit.p;
-      const p = apiRaw(action, payload).then(d => { if ((action === 'listRecords' || action === 'listSchoolAwards') && Array.isArray(d)) d.forEach(r => { if (r.id) REC_VER[r.id] = r.updatedAt || r.createdAt || ''; }); return d; });
+      const u = PERSIST.has(action) ? userKey() : '', pkey = u + '|' + key;
+      // มีข้อมูลที่จำไว้ในเครื่อง: ใช้ทันที แล้วตรวจข้อมูลล่าสุดเบื้องหลัง
+      const saved = u && !opt.fresh ? await dataDB.get(pkey) : null;
+      if (saved && Date.now() - saved.t < DATA_DAYS * 864e5) {
+        const p = Promise.resolve(noteVer(action, saved.d));
+        apiCache.set(key, { t: Date.now(), p });
+        apiRaw(action, payload).then(d => {
+          noteVer(action, d);
+          apiCache.set(key, { t: Date.now(), p: Promise.resolve(d) });
+          dataDB.put(pkey, { t: Date.now(), d });
+          if (JSON.stringify(d) !== JSON.stringify(saved.d)) scheduleViewRefresh();
+        }).catch(() => { });
+        return p;
+      }
+      const p = apiRaw(action, payload).then(d => { noteVer(action, d); if (u) dataDB.put(pkey, { t: Date.now(), d }); return d; });
       apiCache.set(key, { t: Date.now(), p });
       p.catch(() => { if (apiCache.get(key) && apiCache.get(key).p === p) apiCache.delete(key); });
       return p;
@@ -159,12 +212,14 @@
   }
 
   let busyN = 0;
+  // แสดงวงกลมกำลังโหลดเฉพาะเมื่อรอนานกว่า 0.18 วินาที (ข้อมูลที่จำไว้แสดงทันที ไม่กระพริบ)
+  let busyT = null;
   async function busy(fn) {
-    busyN++; let el = $('.loading');
-    if (!el) { el = document.createElement('div'); el.className = 'loading'; el.innerHTML = '<div class="spinner" role="status" aria-label="กำลังโหลด"></div>'; document.body.appendChild(el); }
+    busyN++;
+    if (!busyT && !$('.loading')) busyT = setTimeout(() => { busyT = null; if (busyN > 0 && !$('.loading')) { const el = document.createElement('div'); el.className = 'loading'; el.innerHTML = '<div class="spinner" role="status" aria-label="กำลังโหลด"></div>'; document.body.appendChild(el); } }, 180);
     try { return await fn(); }
     catch (e) { toast(e.message, true); throw e; }
-    finally { if (--busyN <= 0) { busyN = 0; el.remove(); } }
+    finally { if (--busyN <= 0) { busyN = 0; clearTimeout(busyT); busyT = null; const el = $('.loading'); if (el) el.remove(); } }
   }
 
   /* ปุ่มรูปตา แสดง/ซ่อนรหัสผ่าน — ใส่ให้ทุกช่องรหัสผ่านอัตโนมัติ */
@@ -358,7 +413,7 @@
   }
 
   async function enter(d) {
-    S.role = d.role; S.user = d.user; S.cache = {}; S.authUid = d.uid || null; clearCache();
+    S.role = d.role; S.user = d.user; S.cache = {}; S.authUid = d.uid || null; apiCache.clear();
     S.meta = d.meta || await api('meta');
     S.fy = S.meta.years.includes(curFY()) ? curFY() : (S.meta.years[0] || curFY());
     if (S.role !== 'admin') myFy();
@@ -451,7 +506,7 @@
     stopPendingWatch();
     if (!silent && S.token) { try { await busy(() => api('logout')); } catch (e) { } }
     S.token = null; S.user = null; S.role = null; store.set('hr_token', null);
-    clearCache(); photoDB.clear(); // ไม่เก็บข้อมูลของบัญชีเดิมไว้ในเครื่อง (เผื่อใช้เครื่องร่วมกัน)
+    clearCache(); apiCache.clear(); dataDB.clear(); photoDB.clear(); // ไม่เก็บข้อมูลของบัญชีเดิมไว้ในเครื่อง (เผื่อใช้เครื่องร่วมกัน)
     renderLogin(silent && wasIn ? 'หมดเวลาการใช้งาน กรุณาเข้าสู่ระบบใหม่' : '');
   }
 
@@ -490,7 +545,8 @@
     const views = { profile: viewProfile, password: viewPassword, overview: viewOverview, staff: viewStaff, settings: viewSettings, leave: viewLeave, leaves: viewLeaves };
     KINDS.forEach(k => { views[KIND[k].tab] = el => viewKind(el, k); views[KIND[k].adminTab] = el => viewRecords(el, k); });
     views.school = viewSchool;
-    (views[S.tab] || viewProfile)(v);
+    S.viewFn = views[S.tab] || viewProfile;
+    S.viewFn(v);
   }
 
   /* ---------------- profile ---------------- */
