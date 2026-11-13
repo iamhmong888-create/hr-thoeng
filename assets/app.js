@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261113b';
+  const APP_VERSION = '20261113c';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -949,9 +949,9 @@
     $('#ov-body').innerHTML = `
       <div class="stats">
         <div class="stat"><div class="v">${staff.length}</div><div class="k">บุคลากรทั้งหมด (คน)</div></div>
+        <div class="stat stat-alert"><div class="v" style="color:${none ? 'var(--bad)' : 'var(--good)'}">${none}</div><div class="k" style="color:${none ? 'var(--bad)' : 'var(--good)'};font-weight:700">คนที่ยังไม่มีรายการ</div></div>
         <div class="stat"><div class="v">${recs.length}</div><div class="k">รายการพัฒนาตนเอง</div></div>
         <div class="stat"><div class="v">${sumHours(recs).toLocaleString('th-TH')}</div><div class="k">ชั่วโมงพัฒนารวม</div></div>
-        <div class="stat"><div class="v" style="color:${none ? 'var(--warn)' : 'var(--good)'}">${none}</div><div class="k">คนที่ยังไม่มีรายการ</div></div>
         <div class="stat"><div class="v" style="color:${recs.some(r => !r.review) ? 'var(--warn)' : 'var(--good)'}">${recs.filter(r => !r.review).length}</div><div class="k">รายการพัฒนาฯ รอตรวจ</div></div>
         <div class="stat click" data-go="awards" title="ไปที่ ${KIND.award.adminMenu}"><div class="v">${awards.length}</div><div class="k">โล่/รางวัล (${new Set(awards.map(r => r.staffId)).size} คน)${awards.some(r => !r.review) ? ` · <span style="color:var(--warn)">รอตรวจ ${awards.filter(r => !r.review).length}</span>` : ''}</div></div>
         <div class="stat click" data-go="speakers" title="ไปที่ ${KIND.speaker.adminMenu}"><div class="v">${talks.length}</div><div class="k">งานวิทยากร (${sumHours(talks)} ชม.)${talks.some(r => !r.review) ? ` · <span style="color:var(--warn)">รอตรวจ ${talks.filter(r => !r.review).length}</span>` : ''}</div></div>
