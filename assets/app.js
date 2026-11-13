@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   // เปลี่ยนเลขนี้ทุกครั้งที่อัปเดตไฟล์ เพื่อให้มือถือโหลดไฟล์ใหม่ (ไม่ใช้ไฟล์เก่าที่จำไว้)
-  const APP_VERSION = '20261111b';
+  const APP_VERSION = '20261113a';
   const CFG = Object.assign({ FIREBASE: null, ORG_NAME: 'หน่วยงาน', APP_TITLE: 'ระบบงานบุคลากร', LOGO: 'logo.png', CREDIT: '' }, window.APP_CONFIG || {});
   const loginLogo = () => CFG.LOGO ? `<img class="login-logo" src="${esc(CFG.LOGO)}" alt="โลโก้ ${esc(CFG.ORG_NAME)}" onerror="this.remove()">` : '';
   const loginCredit = () => CFG.CREDIT ? `<p class="login-credit">${esc(CFG.CREDIT)}</p>` : '';
@@ -60,6 +60,17 @@
       report: 'รายงานการเป็นวิทยากร', reportAll: 'รายงานการเป็นวิทยากรของบุคลากร', file: 'การเป็นวิทยากร'
     }
   };
+  // โล่/รางวัลของสถานศึกษา: ผู้บริหารบันทึก ใช้หน้าจอ/ฟอร์ม/รายงานชุดเดียวกับรางวัลของครู (ไม่มีการตรวจ)
+  KIND.school = {
+    tab: 'school', adminTab: 'school', menu: 'โล่/รางวัลสถานศึกษา', adminMenu: 'โล่/รางวัลสถานศึกษา', name: 'รายการโล่/รางวัลของสถานศึกษา',
+    head: 'โล่/รางวัลของสถานศึกษา', desc: 'รางวัลที่ศูนย์ส่งเสริมการเรียนรู้ได้รับในนามหน่วยงาน', add: '+ เพิ่มรางวัลสถานศึกษา', addTitle: 'เพิ่มโล่/รางวัลของสถานศึกษา', editTitle: 'แก้ไขโล่/รางวัลของสถานศึกษา',
+    types: KIND.award.types, typeLabel: 'ประเภทรางวัล', typeFallback: 'รางวัล',
+    titleLabel: 'ชื่อรางวัล / ผลงานที่ได้รับรางวัล', titlePh: 'เช่น สถานศึกษาดีเด่น ระดับจังหวัด ประจำปี 2570', placeLabel: 'สถานที่รับรางวัล', orgLabel: 'หน่วยงานที่มอบรางวัล', orgShort: 'มอบโดย',
+    detailLabel: 'รายละเอียดผลงาน / ความสำคัญของรางวัล', detailShort: 'รายละเอียด', detailPh: 'ผลงานที่ได้รับรางวัล ผู้รับผิดชอบ หรือประโยชน์ที่เกิดกับหน่วยงาน', detailReq: false,
+    level: true, range: true, dateLabel: 'วันที่ได้รับรางวัล (วัน เดือน พ.ศ.)', noReview: true, saveAction: 'saveSchoolAward', delAction: 'deleteSchoolAward',
+    empty: 'กด “เพิ่มรางวัลสถานศึกษา” เพื่อบันทึกโล่ ถ้วย เกียรติบัตร หรือรางวัลที่หน่วยงานได้รับ',
+    report: 'รายงานโล่/รางวัลของสถานศึกษา', reportAll: 'รายงานโล่/รางวัลของสถานศึกษา', file: 'โล่รางวัลสถานศึกษา'
+  };
   const KINDS = ['dev', 'award', 'speaker'];
   const kindOf = r => KIND[r && r.kind] ? r.kind : 'dev';
   const ofKind = (list, k) => list.filter(r => kindOf(r) === k);
@@ -111,7 +122,7 @@
   /* จำข้อมูลที่โหลดแล้วไว้ในหน่วยความจำ: เปิดเมนูเดิมซ้ำไม่ต้องรอโหลดใหม่
      - ล้างทันทีเมื่อมีการบันทึก/แก้ไข/ลบ หรือเมื่อมีรายการใหม่จากคนอื่น (เรียลไทม์)
      - เก็บไว้ไม่เกิน 5 นาที แล้วโหลดใหม่ (เพื่อให้เห็นผลการตรวจล่าสุด) */
-  const READ_ACTIONS = new Set(['listRecords', 'listStaff', 'listLeaves', 'listLeaveBalances', 'meta', 'listAdmins']);
+  const READ_ACTIONS = new Set(['listSchoolAwards', 'listRecords', 'listStaff', 'listLeaves', 'listLeaveBalances', 'meta', 'listAdmins']);
   const NO_CLEAR = new Set(['getPhotos', 'setupStatus', 'me', 'forgotPassword', 'backupData']);
   const CACHE_MS = 5 * 60 * 1000;
   const apiCache = new Map();
@@ -121,13 +132,13 @@
       const key = action + '|' + JSON.stringify(payload);
       const hit = apiCache.get(key);
       if (hit && !opt.fresh && Date.now() - hit.t < CACHE_MS) return hit.p;
-      const p = apiRaw(action, payload).then(d => { if (action === 'listRecords' && Array.isArray(d)) d.forEach(r => { if (r.id) REC_VER[r.id] = r.updatedAt || r.createdAt || ''; }); return d; });
+      const p = apiRaw(action, payload).then(d => { if ((action === 'listRecords' || action === 'listSchoolAwards') && Array.isArray(d)) d.forEach(r => { if (r.id) REC_VER[r.id] = r.updatedAt || r.createdAt || ''; }); return d; });
       apiCache.set(key, { t: Date.now(), p });
       p.catch(() => { if (apiCache.get(key) && apiCache.get(key).p === p) apiCache.delete(key); });
       return p;
     }
     const res = await apiRaw(action, payload);
-    if (!NO_CLEAR.has(action)) { clearCache(); if (action === 'saveRecord' && payload.record && payload.record.id) photoForget(payload.record.id); }
+    if (!NO_CLEAR.has(action)) { clearCache(); if ((action === 'saveRecord' || action === 'saveSchoolAward') && payload.record && payload.record.id) photoForget(payload.record.id); }
     return res;
   }
   async function apiRaw(action, payload) {
@@ -447,7 +458,7 @@
   /* ---------------- shell ---------------- */
   const TABS = {
     teacher: [['profile', 'ประวัติส่วนตัว'], ...KINDS.map(k => [KIND[k].tab, KIND[k].menu]), ['leave', 'การลา'], ['password', 'เปลี่ยนรหัสผ่าน']],
-    admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ...KINDS.map(k => [KIND[k].adminTab, KIND[k].adminMenu]), ['leaves', 'การลา'], ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
+    admin: [['overview', 'ภาพรวม'], ['staff', 'ข้อมูลบุคลากร'], ...KINDS.map(k => [KIND[k].adminTab, KIND[k].adminMenu]), ['school', KIND.school.adminMenu], ['leaves', 'การลา'], ['settings', 'ตั้งค่าปีงบ/โครงการ'], ['password', 'เปลี่ยนรหัสผ่าน']]
   };
   function demoBar() { return `<div class="demo-bar">โหมดทดลอง: ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ใส่ค่า FIREBASE ใน config.js เพื่อใช้งานจริง</div>`; }
 
@@ -478,6 +489,7 @@
     const v = $('#view');
     const views = { profile: viewProfile, password: viewPassword, overview: viewOverview, staff: viewStaff, settings: viewSettings, leave: viewLeave, leaves: viewLeaves };
     KINDS.forEach(k => { views[KIND[k].tab] = el => viewKind(el, k); views[KIND[k].adminTab] = el => viewRecords(el, k); });
+    views.school = viewSchool;
     (views[S.tab] || viewProfile)(v);
   }
 
@@ -633,7 +645,7 @@
     ].join('');
     return `<article class="rec st-${esc(r.review || 'pending')}${opts.isNew ? ' rec-new' : ''}" data-id="${esc(r.id)}" data-who="${esc(opts.who || '')}">
       <div class="body">
-        <div class="meta">${opts.isNew ? '<span class="chip new">ใหม่</span>' : ''}${reviewChip(r)}<span class="chip ink">${esc(r.type || K.typeFallback)}</span>${K.level && r.level ? `<span class="chip accent">${esc(r.level)}</span>` : ''}<span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${K.hours && r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
+        <div class="meta">${opts.isNew ? '<span class="chip new">ใหม่</span>' : ''}${K.noReview ? '' : reviewChip(r)}<span class="chip ink">${esc(r.type || K.typeFallback)}</span>${K.level && r.level ? `<span class="chip accent">${esc(r.level)}</span>` : ''}<span class="num">${esc(thRange(r.startDate, r.endDate))}</span>${K.hours && r.hours ? `<span class="num">${esc(r.hours)} ชั่วโมง</span>` : ''}</div>
         <h3>${esc(r.title)}</h3>
         ${opts.who ? `<div class="small"><b>${esc(opts.who)}</b></div>` : ''}
         ${info ? `<div class="meta">${info}</div>` : ''}
@@ -642,7 +654,7 @@
         ${K.apply && r.apply ? `<div class="small" style="margin-top:.2rem"><b class="lbl">${K.applyLabel}</b></div>
         <div class="know ${long ? 'clamp' : ''}">${esc(r.apply)}</div>` : ''}
         ${long ? `<button class="btn ghost sm no-print" data-more style="align-self:flex-start">อ่านทั้งหมด</button>` : ''}
-        ${reviewBox(r)}
+        ${K.noReview ? '' : reviewBox(r)}
       </div>
       <div class="photos">${ph}</div>
       ${mode === 'own' ? `<div class="ops"><button class="btn sm" data-edit>แก้ไข</button><button class="btn sm danger" data-del>ลบ</button></div>`
@@ -736,7 +748,7 @@
       const rv = $('[data-review]', el); if (rv) rv.onclick = () => reviewForm(r, el.dataset.who, reload);
       const dl = $('[data-del]', el); if (dl) dl.onclick = async () => {
         if (!(await confirmBox(`ลบรายการ “${r.title}” และรูปหลักฐานทั้งหมด?`, 'ลบรายการ'))) return;
-        try { await busy(() => api('deleteRecord', { id: r.id })); toast('ลบรายการแล้ว'); reload(); } catch (e) { }
+        try { await busy(() => api(KIND[kindOf(r)].delAction || 'deleteRecord', { id: r.id })); toast('ลบรายการแล้ว'); reload(); } catch (e) { }
       };
     });
   }
@@ -886,7 +898,7 @@
       if (applyReq && !rec.apply) return toast('กรุณากรอก' + K.applyLabel, true);
       const ph = photos.map((p, i) => p === 'keep' ? 'keep' : p ? p : (r['photo' + (i + 1)] ? null : 'keep'));
       try {
-        await busy(() => api('saveRecord', { record: rec, photos: ph }));
+        await busy(() => api(K.saveAction || 'saveRecord', { record: rec, photos: ph }));
         m.close(); toast(isNew ? 'เพิ่มรายการแล้ว' : 'บันทึกการแก้ไขแล้ว');
         if (rec.year !== S.fy && S.tab === K.tab) { S.fy = rec.year; const s = $('#dev-fy'); if (s) s.value = rec.year; }
         reload && reload();
@@ -920,7 +932,8 @@
       <div class="actions"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('ov-fy', S.fy)}</label></div></div><div id="ov-body" class="stack"></div>`;
     $('#ov-fy').onchange = e => { S.fy = e.target.value; viewOverview(v); };
     let staff, recs, allRecs;
-    try { [staff, allRecs] = await busy(() => Promise.all([getStaff(), api('listRecords', { year: S.fy })])); } catch (e) { return; }
+    let schoolAw = [];
+    try { [staff, allRecs, schoolAw] = await busy(() => Promise.all([getStaff(), api('listRecords', { year: S.fy }), api('listSchoolAwards', { year: S.fy }).catch(() => [])])); } catch (e) { return; }
     if (!v.isConnected) return;
     // เฉพาะบุคลากรที่ปฏิบัติงานในปีงบประมาณที่เลือก (และคนที่มีรายการในปีนั้น)
     staff = staff.filter(s => activeIn(s, S.fy) || allRecs.some(r => r.staffId === s.id));
@@ -949,6 +962,7 @@
           <button class="log-btn lb-dev" data-log="dev"><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg></span><span class="lb-tx"><b>การเข้ารับการพัฒนาศักยภาพ</b><small>${recs.length} รายการ · ${sumHours(recs).toLocaleString('th-TH')} ชั่วโมง</small></span><span class="lb-go" aria-hidden="true">›</span></button>
           <button class="log-btn lb-sp" data-log="speaker"><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5M8 22h8"/></svg></span><span class="lb-tx"><b>การได้รับเป็นวิทยากร</b><small>${talks.length} รายการ · ${sumHours(talks).toLocaleString('th-TH')} ชั่วโมง</small></span><span class="lb-go" aria-hidden="true">›</span></button>
           <button class="log-btn lb-aw" data-log="award"><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/></svg></span><span class="lb-tx"><b>การรับโล่หรือรางวัล</b><small>${awards.length} รายการ · ${new Set(awards.map(r => r.staffId)).size} คน</small></span><span class="lb-go" aria-hidden="true">›</span></button>
+          <button class="log-btn lb-sc" data-slog><span class="lb-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6"/></svg></span><span class="lb-tx"><b>โล่/รางวัลของสถานศึกษา</b><small>${schoolAw.length} รายการ</small></span><span class="lb-go" aria-hidden="true">›</span></button>
         </div>
       </section>
       <section class="panel"><h3>การเข้าร่วมตามโครงการ ปีงบประมาณ ${esc(S.fy)}</h3>
@@ -962,6 +976,7 @@
         <td><div class="bar"><i style="width:${(sumHours(list) / maxH * 100).toFixed(1)}%"></i></div></td><td class="r num">${awards.filter(r => r.staffId === s.id).length || '—'}</td><td class="r num">${talks.filter(r => r.staffId === s.id).length || '—'}</td><td class="small num">${list[0] ? esc(thDate(list[0].startDate, true)) : '—'}</td></tr>`).join('')}
       </tbody></table></div></section>`;
     $$('#ov-body tr.click[data-id]').forEach(tr => tr.onclick = () => staffDetail(staff.find(s => s.id === tr.dataset.id), () => viewOverview(v)));
+    const sl = $('#ov-body [data-slog]'); if (sl) sl.onclick = () => reportSchoolLog(schoolAw, S.fy);
     $$('#ov-body [data-log]').forEach(b => b.onclick = () => reportLog(b.dataset.log, ofKind(allRecs, b.dataset.log), staff, S.fy));
     $$('#ov-body [data-go]').forEach(el => el.onclick = () => { S.tab = el.dataset.go; store.set('hr_tab_' + S.role, S.tab); render(); });
     $$('#ov-body tr.click[data-proj]').forEach(tr => tr.onclick = () => { S.cache.recPreset = { fy: S.fy, proj: tr.dataset.proj }; S.tab = 'records'; render(); });
@@ -1121,7 +1136,8 @@
     .rp-root table.rp-log .lg-sub{font-size:12px;color:#555}
     .rp-root table.rp-log tr th:nth-child(1){width:6%}.rp-root table.rp-log tr th:nth-child(2){width:17%}.rp-root table.rp-log tr th:nth-child(3){width:33%}
     .rp-root table.rp-log tr th:nth-child(4){width:13%}.rp-root table.rp-log tr th:nth-child(5){width:17%}.rp-root table.rp-log tr th:nth-child(6),.rp-root table.rp-log tr th:nth-child(7){width:7%}
-    .rp-root table.rp-log.no-h tr th:nth-child(3){width:44%}.rp-root table.rp-log.no-h tr th:nth-child(5){width:20%}
+    .rp-root table.rp-log.no-h tr th:nth-child(3){width:44%}
+    .rp-root table.rp-slog tr th:nth-child(1){width:7%}.rp-root table.rp-slog tr th:nth-child(2){width:43%}.rp-root table.rp-slog tr th:nth-child(3){width:16%}.rp-root table.rp-slog tr th:nth-child(4){width:12%}.rp-root table.rp-slog tr th:nth-child(5){width:22%}.rp-root table.rp-log.no-h tr th:nth-child(5){width:20%}
     .rp-root table.rp-log tr td.g{vertical-align:middle}
     .rp-root table.rp-log tr.g-first td{border-top:1.5px solid #6b7685}
     .rp-root .rp-empty{color:#666;text-align:center;padding:16px;border:1px dashed #bbb}`;
@@ -1370,7 +1386,7 @@
       <div class="rp-m">${who ? `<b>${esc(who)}</b> · ` : ''}${esc(r.type || '')}${K.level && r.level ? ` · ${esc(r.level)}` : ''} · ${esc(thRange(r.startDate, r.endDate))}${K.hours && r.hours ? ` · ${esc(r.hours)} ชั่วโมง` : ''}</div>
       <table class="rp-kv">${K.project ? `<tr><td>ปีงบประมาณ / โครงการ</td><td>${esc(r.year)} · ${esc(r.projectName || '-')}</td></tr>` : row('ปีงบประมาณ', r.year)}
       ${K.level ? row('ระดับรางวัล', r.level) : ''}${row(K.orgLabel, r.organizer)}${row(K.placeLabel, r.place)}${K.audience ? row('กลุ่มผู้เข้าร่วม / จำนวน', r.audience) : ''}
-      <tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>
+      ${K.noReview ? '</table>' : `<tr><td>ผลการตรวจ</td><td>${esc((REVIEW[r.review || ''] || REVIEW[''])[1])}${r.reviewBy ? ` โดย ${esc(r.reviewBy)}` : ''}${r.reviewAt ? ` (${esc(thDate(r.reviewAt, true))})` : ''}${r.reviewNote ? ` — ${esc(r.reviewNote)}` : ''}</td></tr></table>`}
       ${K.detailReq || r.knowledge ? `<div class="rp-k">${K.detailLabel}</div>${rpParas(r.knowledge || '-')}` : ''}${K.apply && r.apply ? `<div class="rp-k">${K.applyLabel}</div>${rpParas(r.apply)}` : ''}<div class="rp-ph">${ph}</div></div>`;
   }
 
@@ -1403,6 +1419,46 @@
       subtitle: name + (year ? ` · ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : ''), build, recs: recs || [],
       filename: [recs ? (profile ? 'ประวัติและผลการปฏิบัติงาน' : K.file) : 'ประวัติส่วนตัว', u.firstName, u.lastName, year, project ? project.slice(0, 40) : ''].filter(Boolean).join(' ')
     });
+  }
+
+  // หน้าผู้บริหาร: โล่/รางวัลของสถานศึกษา
+  async function viewSchool(v) {
+    const K = KIND.school;
+    v.innerHTML = `<div class="page-head"><div class="grow"><h1>${K.head}</h1><div class="muted small">${K.desc}</div></div>
+      <div class="actions no-print"><label class="field" style="min-width:220px"><span>ปีงบประมาณ</span>${yearSelect('sc-fy', S.fy, true)}</label></div></div>
+      <div id="sc-body" class="stack"><div class="empty-state">กำลังโหลด…</div></div>`;
+    const reload = () => viewSchool(v);
+    $('#sc-fy').onchange = e => { if (e.target.value) S.fy = e.target.value; load(); };
+    const load = async () => {
+      const y = $('#sc-fy').value;
+      let list; try { list = await busy(() => api('listSchoolAwards', { year: y })); } catch (e) { return; }
+      const box = $('#sc-body'); if (!box || !box.isConnected) return;
+      const lv = l => list.filter(r => r.level === l).length;
+      box.innerHTML = `<div class="stats"><div class="stat"><div class="v">${list.length}</div><div class="k">รางวัลทั้งหมด</div></div>
+          <div class="stat"><div class="v">${lv('ระดับอำเภอ')}</div><div class="k">ระดับอำเภอ</div></div><div class="stat"><div class="v">${lv('ระดับจังหวัด')}</div><div class="k">ระดับจังหวัด</div></div>
+          <div class="stat"><div class="v">${lv('ระดับภาค') + lv('ระดับประเทศ') + lv('ระดับนานาชาติ')}</div><div class="k">ระดับภาคขึ้นไป</div></div></div>
+        <div class="page-head no-print" style="margin-top:.4rem"><div class="grow"><h2>${y ? `ปีงบประมาณ พ.ศ. ${esc(y)}` : 'ทุกปีงบประมาณ'}</h2>${y ? `<div class="small muted">${fyRange(y)}</div>` : ''}</div>
+          <div class="actions"><button class="btn" id="sc-log">ตาราง</button><button class="btn" id="sc-pdf">ดู PDF</button><button class="btn accent" id="sc-add">${K.add}</button></div></div>
+        <div class="recs">${list.length ? list.map(r => recCard(r, { mode: 'own' })).join('') : `<div class="empty-state">ยังไม่มีรายการ<br>${K.empty}</div>`}</div>`;
+      $('#sc-add').onclick = () => recordForm({ year: y || S.fy, kind: 'school' }, load, 'school');
+      $('#sc-pdf').onclick = () => reportSchool(list, y);
+      $('#sc-log').onclick = () => reportSchoolLog(list, y);
+      bindRecList(box, list, load);
+    };
+    load();
+  }
+  function reportSchool(list, year) {
+    const sorted = byDate(list);
+    const build = () => `<div class="rp-sum">${rpSummary('award', sorted)}</div>${sorted.length ? sorted.map((r, i) => rpRecord(r, i + 1)).join('') : '<div class="rp-empty">ยังไม่มีรายการ</div>'}`;
+    openReport({ title: KIND.school.report, subtitle: year ? `ปีงบประมาณ พ.ศ. ${year} (${fyRange(year)})` : 'ทุกปีงบประมาณ', build, recs: sorted, filename: [KIND.school.file, year].filter(Boolean).join(' ') });
+  }
+  function reportSchoolLog(list, year) {
+    const sorted = byDate(list);
+    const shortRange = r => TH_M.reduce((t, m, i) => t.replace(m, TH_MS[i]), thRange(r.startDate, r.endDate));
+    const build = () => `<table class="rp-log rp-slog"><thead><tr><th class="c">ลำดับที่</th><th>รางวัลที่ได้รับ</th><th class="c">ประเภท / ระดับ</th><th class="c">วันที่</th><th>หน่วยงานที่มอบ</th></tr></thead><tbody>
+      ${sorted.map((r, i) => `<tr><td class="c">${i + 1}</td><td>${esc(r.title)}${r.knowledge ? `<div class="lg-sub">${esc(r.knowledge.split('\n')[0].slice(0, 120))}</div>` : ''}</td><td class="c">${esc([r.type, r.level].filter(Boolean).join(' · ') || '-')}</td><td class="c nw">${esc(shortRange(r))}</td><td>${esc(r.organizer || '-')}</td></tr>`).join('') || '<tr><td colspan="5" class="c">ยังไม่มีรายการ</td></tr>'}
+      </tbody></table><div class="rp-sum" style="margin-top:10px"><span>รวม <b>${sorted.length}</b> รางวัล</span></div>`;
+    openReport({ title: 'ตารางบันทึกการรับโล่หรือรางวัลของสถานศึกษา', subtitle: year ? `ปีงบประมาณ พ.ศ. ${year}` : 'ทุกปีงบประมาณ', build, landscape: true, filename: ['ตารางโล่รางวัลสถานศึกษา', year ? 'ปีงบประมาณ ' + year : ''].filter(Boolean).join(' ') });
   }
 
   /* ตารางบันทึกรวมทุกคน (ตามแบบฟอร์ม): 1 แถวต่อ 1 รายการ เรียงตามรายชื่อบุคลากร
@@ -1701,7 +1757,7 @@
 
   /* ---------------- สำรอง / กู้คืนข้อมูล ---------------- */
   const BK_TAG = 'hr-thoeng-backup';
-  const BK_LABEL = { staff: 'บุคลากร (คน)', users: 'บัญชีเข้าสู่ระบบ', records: 'รายการพัฒนาตนเอง/โล่/วิทยากร', photos: 'รูปหลักฐาน (รายการ)', leaves: 'รายการลา', leaveBalances: 'วันลาสะสม' };
+  const BK_LABEL = { staff: 'บุคลากร (คน)', users: 'บัญชีเข้าสู่ระบบ', records: 'รายการพัฒนาตนเอง/โล่/วิทยากร', photos: 'รูปหลักฐาน (รายการ)', leaves: 'รายการลา', leaveBalances: 'วันลาสะสม', schoolAwards: 'โล่/รางวัลสถานศึกษา', schoolPhotos: 'รูปโล่/รางวัลสถานศึกษา' };
   const bkCounts = d => Object.keys(BK_LABEL).filter(k => d[k]).map(k => `<tr><td>${BK_LABEL[k]}</td><td class="r num">${Object.keys(d[k]).length.toLocaleString('th-TH')}</td></tr>`).join('');
   async function downloadBackup(photos) {
     const ov = pdfOverlay('กำลังเตรียมไฟล์สำรอง…');
@@ -1960,6 +2016,16 @@
             (q.photos || []).forEach((ph, i) => { if (ph === 'keep') return; r['photo' + (i + 1)] = ph && ph.data ? ph.data : ''; });
             save(); return ok(r);
           }
+          case 'listSchoolAwards': return ok((db.school || []).filter(x => !q.year || x.year === q.year).map(x => Object.assign({ kind: 'school' }, x)).sort((a, b) => b.startDate.localeCompare(a.startDate)));
+          case 'saveSchoolAward': {
+            if (!isAdmin) return err('สำหรับผู้บริหารเท่านั้น');
+            const d = q.record; db.school = db.school || []; let r = d.id ? db.school.find(x => x.id === d.id) : null;
+            if (!r) { r = { id: 'sa-' + Date.now() }; db.school.push(r); }
+            ['year', 'type', 'level', 'title', 'place', 'organizer', 'startDate', 'endDate', 'knowledge'].forEach(k => r[k] = d[k] || '');
+            (q.photos || []).forEach((ph, i) => { if (ph === 'keep') return; r['photo' + (i + 1)] = ph && ph.data ? ph.data : ''; });
+            save(); return ok(r);
+          }
+          case 'deleteSchoolAward': if (!isAdmin) return err('สำหรับผู้บริหารเท่านั้น'); db.school = (db.school || []).filter(x => x.id !== q.id); save(); return ok(true);
           case 'listLeaves': {
             let r = (db.leaves || []).slice();
             if (!isAdmin || q.mine) r = r.filter(x => x.staffId === ses.id); else if (q.staffId) r = r.filter(x => x.staffId === q.staffId);

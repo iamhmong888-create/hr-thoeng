@@ -307,6 +307,7 @@ body { overflow-x: clip; }
 .log-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--c2) 55%, #fff); outline-offset: 2px; }
 .log-btn.lb-sp { --c1: #0f6b5c; --c2: #1fa387; }
 .log-btn.lb-aw { --c1: #9a5b06; --c2: #d9961c; }
+.log-btn.lb-sc { --c1: #6b2f8f; --c2: #a259c8; }
 .lb-ic { flex: none; width: 2.8rem; height: 2.8rem; border-radius: 12px; background: rgba(255,255,255,.18); display: grid; place-items: center; }
 .lb-ic svg { width: 1.5rem; height: 1.5rem; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .lb-tx { flex: 1; display: flex; flex-direction: column; min-width: 0; }

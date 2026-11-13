@@ -22,6 +22,7 @@ const REC_FIELDS = ['kind', 'year', 'projectId', 'type', 'title', 'place', 'orga
 // ประเภทรายการ: dev = การพัฒนาตนเอง (รายการเดิมที่ไม่มี kind) · award = โล่/รางวัล · speaker = วิทยากร
 const KINDS = ['dev', 'award', 'speaker'];
 const kindOf = r => KINDS.includes(r && r.kind) ? r.kind : 'dev';
+const SCHOOL_FIELDS = ['year', 'type', 'level', 'title', 'place', 'organizer', 'startDate', 'endDate', 'knowledge'];
 const LEAVE_FIELDS = ['year', 'type', 'startDate', 'endDate', 'days', 'note'];
 const NO_EMAIL_DOMAIN = 'no-email.local';
 const PREFIXES = ['นางสาว', 'น.ส.', 'นาย', 'นาง', 'ครู'];
@@ -350,9 +351,49 @@ export function create(CFG) {
 
     async getPhotos(q) {
       await me();
-      const s = await getDoc(D('photos', q.id));
+      const s = await getDoc(D(String(q.id).startsWith('sa-') ? 'schoolPhotos' : 'photos', q.id));
       const d = s.exists() ? s.data() : {};
       return { p1: d.p1 || '', p2: d.p2 || '' };
+    },
+
+    /* ---------- โล่/รางวัลของสถานศึกษา (ผู้บริหาร/ผู้ดูแลบันทึก) ---------- */
+    async listSchoolAwards(q) {
+      await me();
+      const snap = await getDocs(q.year ? query(C('schoolAwards'), where('year', '==', String(q.year))) : C('schoolAwards'));
+      return snap.docs.map(x => { const r = x.data(); const o = { id: x.id, kind: 'school' };
+        SCHOOL_FIELDS.concat(['createdAt', 'updatedAt', 'createdBy']).forEach(k => o[k] = r[k] === undefined ? '' : String(r[k]));
+        o.photo1 = r.hasPhoto1 ? `fs:${x.id}:1` : ''; o.photo2 = r.hasPhoto2 ? `fs:${x.id}:2` : ''; return o; })
+        .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+    },
+    async saveSchoolAward(q) {
+      const c = await me(); needAdmin(c);
+      const r = q.record || {};
+      if (!r.year) throw new Error('กรุณาเลือกปีงบประมาณ');
+      if (!r.title) throw new Error('กรุณากรอกชื่อรางวัล');
+      if (!r.startDate) throw new Error('กรุณาเลือกวันที่');
+      let id = r.id, old = null;
+      if (id) { const sn = await getDoc(D('schoolAwards', id)); if (!sn.exists()) throw new Error('ไม่พบรายการ'); old = sn.data(); }
+      else id = 'sa-' + doc(C('schoolAwards')).id;
+      const out = { updatedAt: nowISO(), createdAt: old ? old.createdAt || nowISO() : nowISO(), createdBy: old ? old.createdBy || c.name || '' : c.name || '' };
+      SCHOOL_FIELDS.forEach(k => out[k] = String(r[k] === undefined || r[k] === null ? '' : r[k]).trim());
+      const photos = q.photos || ['keep', 'keep'], ph = {};
+      [1, 2].forEach(n => {
+        const v = photos[n - 1];
+        if (v === 'keep' || v === undefined) { out['hasPhoto' + n] = !!(old && old['hasPhoto' + n]); return; }
+        const data = v && v.data ? String(v.data) : '';
+        if (data.length > 480000) throw new Error('รูปภาพใหญ่เกินไป');
+        ph['p' + n] = data; out['hasPhoto' + n] = !!data;
+      });
+      const b = writeBatch(db);
+      b.set(D('schoolAwards', id), out);
+      b.set(D('schoolPhotos', id), ph, { merge: true });
+      await b.commit();
+      return Object.assign({ id, kind: 'school' }, out);
+    },
+    async deleteSchoolAward(q) {
+      needAdmin(await me());
+      const b = writeBatch(db); b.delete(D('schoolAwards', q.id)); b.delete(D('schoolPhotos', q.id)); await b.commit();
+      return true;
     },
 
     async saveRecord(q) {
@@ -517,7 +558,7 @@ export function create(CFG) {
     async backupData(q) {
       needAdmin(await me());
       const prog = typeof q.onProgress === 'function' ? q.onProgress : () => { };
-      const cols = ['staff', 'users', 'records', 'leaves', 'leaveBalances'].concat(q.photos === false ? [] : ['photos']);
+      const cols = ['staff', 'users', 'records', 'leaves', 'leaveBalances', 'schoolAwards'].concat(q.photos === false ? [] : ['photos', 'schoolPhotos']);
       const data = {};
       for (let i = 0; i < cols.length; i++) {
         prog(`กำลังอ่านข้อมูล ${i + 1}/${cols.length + 1}…`);
@@ -548,12 +589,16 @@ export function create(CFG) {
         });
       };
       prog('กำลังตรวจสอบข้อมูลในระบบ…');
-      for (const col of ['staff', 'users', 'leaves', 'leaveBalances']) await plan(col, false);
+      for (const col of ['staff', 'users', 'leaves', 'leaveBalances', 'schoolAwards']) await plan(col, false);
       await plan('records', true);
       if (d.photos) {
         const recNow = await have('records');
         const src = d.photos, ex = await have('photos'); count.photos = 0;
         Object.keys(src).forEach(id => { if (!ex.has(id) && (recNow.has(id) || (d.records || {})[id])) { ops.push({ ref: D('photos', id), doc: src[id] }); count.photos++; } });
+      }
+      if (d.schoolPhotos) {
+        const ex = await have('schoolPhotos'); count.schoolPhotos = 0;
+        Object.keys(d.schoolPhotos).forEach(id => { if (!ex.has(id) || over) { ops.push({ ref: D('schoolPhotos', id), doc: d.schoolPhotos[id] }); count.schoolPhotos++; } });
       }
       // ปีงบประมาณ/โครงการ
       const cm = (d.config || {}).meta;
